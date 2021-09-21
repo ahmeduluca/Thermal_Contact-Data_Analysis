@@ -7,8 +7,8 @@ import shutil
 ## of exp_log &load &position files & txt converted TDMS group data
 
 # Give the file path to search experiment tdms&txt results:
-tdms_file_list=glob.glob("D:/ahmed/RC experiments/Al/toProc/**/**/*.tdms")
-txt_file_list=glob.glob("D:/ahmed/RC experiments/Al/toProc/**/**/*.txt")
+tdms_file_list=glob.glob("D:/ahmed/RC experiments/Al/September/**/**/*.tdms")
+txt_file_list=glob.glob("D:/ahmed/RC experiments/Al/September/**/**/*.txt")
 
 # Give the new processed file directory path
 process_dir="D:/ahmed/RC experiments/Al/Al-Process/September"

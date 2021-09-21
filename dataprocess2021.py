@@ -21,7 +21,7 @@ bit_to_load=lc_mass_cal*grave
 loadcell_stiffness=536.5 ##mN/um
 gage2um=10 ##um/V
 ###
-exp_per=3870 ##millisec
+exp_per=4000 ##millisec
 daq_frq=0.2 ##kHz
 osc_per=exp_per*daq_frq
 load_files=[]
@@ -67,7 +67,7 @@ mikron=u"\N{GREEK SMALL LETTER MU}"+"m"
 ###
 
 ## Main file of Expriment Data of text files -that converted from NI TDMS-
-main="D:/ahmed/RC experiments/Al/Al-Process/September/01-09-2021"
+main="D:/ahmed/RC experiments/Cu/Cu-Process/September/15-09-2021"
 ###
 
 file_list=[f.path for f in os.scandir(main) if f.is_dir()]
@@ -91,6 +91,11 @@ tempo=[]
 sg=[]
 file_list.sort()
 oscsay=0
+tip_chname="Temperature2"
+gage_chname="Voltage0"
+pos_chname="Actuator_Voltage"
+tip_ch=0
+sample_ch=1
 ## Search for Experiment Files that include Step Files ##
 for i in file_list:
     load=[[]]
@@ -123,12 +128,16 @@ for i in file_list:
                 f=open(k,"r")
                 for x in f:
                     load[n].append(float(x)*bit_to_load/1000)
-            elif("Position" in k):
+            elif(pos_chname in k):
                 position.append([])
                 f=open(k,"r")
                 for x in f:
                     position[n].append(float(x))
             elif("Temperature" in k):
+                if(tip_chname==k):
+                    tip_ch=ch
+                else:
+                    sample_ch=ch
                 if(ch==0 and n>0):
                     temp.append([[],[]])
                 if(tcount==0):
@@ -141,7 +150,7 @@ for i in file_list:
                         temp[n][ch].append(float(x.split()[1]))
                 tcount+=1
                 ch+=1
-            elif("Voltage" in k):
+            elif(gage_chname in k):
                 voltage.append([])
                 if(tcount==0):
                     time.append([])
@@ -152,7 +161,7 @@ for i in file_list:
                             time[n].append(float(x.split()[0]))
                         voltage[n].append(float(x.split()[1])*gage2um)##um conversion
                 tcount+=1
-        #voltage[n]=medfilt(voltage[n],21)
+        voltage[n]=medfilt(voltage[n],31)
         if(n==0):
             min_vol=min(voltage[0])
         for t in range(len(voltage[n])):
@@ -273,17 +282,17 @@ for i in file_list:
             sg=[[]]
             ld=[[]]
             tempo=[]
-            tfit1=[[]]
-            tfit2=[[]]
+            tfitTip=[[]]
+            tfitSample=[[]]
             fitsay=0
             taur=[]
             taud=[]            
             for t in range(starter, final):
-                t1.append(temp[n][0][t])
-                t2.append(temp[n][1][t])
+                t1.append(temp[n][tip_ch][t])
+                t2.append(temp[n][sample_ch][t])
                 tempo.append(time[n][t])
-                tfit1[fitsay].append(temp[n][0][t])
-                tfit2[fitsay].append(temp[n][1][t])
+                tfitTip[fitsay].append(temp[n][tip_ch][t])
+                tfitSample[fitsay].append(temp[n][sample_ch][t])
                 sg[fitsay].append(voltage[n][t])
                 if t in tpt0:
                     tim=np.linspace(0,len(t2)/daq_frq,len(t2))
@@ -321,8 +330,8 @@ for i in file_list:
                             #taular.append(popt1[1])
                     except:
                         taur.append(float('nan'))
-                    tfit1.append([])
-                    tfit2.append([])
+                    tfitTip.append([])
+                    tfitSample.append([])
                     sg.append([])
                     fitsay+=1
                     t1=[]
@@ -360,9 +369,9 @@ for i in file_list:
                 sayacs=0
                 for t in range(fitsay):
                     #print("Length of average:"+str(len(tfit2[t])))
-                    if(len(tfit1[t])>p):
-                        sample[n][p]+=tfit2[t][p]
-                        tip[n][p]+=tfit1[t][p]
+                    if(p<len(tfitTip[t])):
+                        sample[n][p]+=tfitSample[t][p]
+                        tip[n][p]+=tfitTip[t][p]
                         voltMean[n][p]+=sg[t][p]
                         sayacs+=1                         
                 sample[n][p]=sample[n][p]/sayacs
@@ -375,11 +384,11 @@ for i in file_list:
             downss=ldws[n]
             lengvol=int(len(voltMean[n])/2)
 #            print("Length:"+str(lengvol))
-##            for p in range(len(voltMean[n])):
-##                if(t<lengvol):
-##                    voltMean[n][p]-=downss/536.5
-##                else:
-##                    voltMean[n][p]-=upss/536.5
+            for p in range(len(voltMean[n])):
+                if(t<lengvol):
+                    voltMean[n][p]-=downss/536.5
+                else:
+                    voltMean[n][p]-=upss/536.5
             oscsay+=1
             ## Write Averages of Cycles of Temperatures and Strain results to txt file !
             results=j+"/AverageResults.txt"
@@ -419,7 +428,7 @@ for i in file_list:
     ax4.tick_params(axis='y',labelcolor="green")
     left, bottom, width, height = [0.07, 0.8, 0.15, 0.15]
     inset = fig.add_axes([left, bottom, width, height])
-    inset.set_xlabel("Amplitude_pp (%s)"%(mikron),color="red")
+    inset.set_xlabel("Depth (%s)"%(mikron),color="red")
     inset.tick_params(axis='x',labelcolor="red")
     inset.set_ylabel("Time Constant (ms)")
     inset.grid("True",color='red')
@@ -487,9 +496,9 @@ for i in file_list:
     ax4.grid('True',axis='y',color='green')
     ax1.grid('True',color='red')
     inset.set_yticks(np.linspace(round(min(riseTcs)),round(max(riseTcs)),5))
-    l1,=inset.plot(deltadep,riseTcs,'r.-',label="Rise TC vs Depth")
-    inset.set_xticks(deltadep)
-    inset2.set_xticks(np.arange(0,450,50))
+    l1,=inset.plot(depthLoad,riseTcs,'r.-',label="Rise TC vs Depth")
+    inset.set_xticks(depthLoad)
+    inset2.set_xticks(np.linspace(round(min(loadup)),round(max(loadup)),5))
     #l2,=inset.plot(depthUnlod,decayTcs,'b.-',label="Decay TC vs Depth")
     l3,=inset2.plot(loadup,riseTcs,'b.-',label="Rise TC vs Load")
     #l4,=inset2.plot(loaddw,decayTcs,'g.-',label="Decay TC vs Load")
@@ -498,15 +507,18 @@ for i in file_list:
     fig.tight_layout()
     plt.show()
     ###
-##      for t in range(len(taular)):
-##            print(t)
-##          plt.plot(np.arange(1+t*(len(taular[t])),1+len(taular[t])+(len(taular[t])*t)),taular[t],'.')
-##          plt.plot(np.arange(1+t*(len(taulad[t])),1+len(taulad[t])+(len(taulad[t])*t)),taulad[t],'.')
-##          plt.plot(np.arange(1+t*(len(taular[t])),1+len(taular[t])+(len(taular[t])*t)),np.nanmean(taular[t])*np.ones(len(taular[t])),'-',label="Average Rise Step "+str(t+1)+" ="+str(round(np.nanmean(taular[t])))+" ms")
-##          plt.plot(np.arange(1+t*(len(taulad[t])),1+len(taulad[t])+(len(taulad[t])*t)),np.nanmean(taulad[t])*np.ones(len(taulad[t])),'-',label="Average Decay Step "+str(t+1)+" ="+str(round(np.nanmean(taulad[t])))+" ms")
-##    plt.legend()
-##    plt.xlabel("Number of Cycle")
-##    plt.ylabel("Time Constant (ms)")
-##    plt.title(expdates[m]+" Time Constants of Each Cycle")
-##    plt.show()
+    ax=plt.gca()
+    for t in range(len(taular)):
+        print(t)
+        color=next(ax._get_lines.prop_cycler)['color']
+        plt.plot(np.arange(1+t*(len(taular[t])),1+len(taular[t])+(len(taular[t])*t)),taular[t],'.',color=color)
+        plt.plot(np.arange(1+t*(len(taular[t])),1+len(taular[t])+(len(taular[t])*t)),np.nanmean(taular[t])*np.ones(len(taular[t])),'-',label="Average Rise Step "+str(t+1)+" ="+str(round(np.nanmean(taular[t])))+" ms",color=color)
+        color=next(ax._get_lines.prop_cycler)['color']
+        plt.plot(np.arange(1+t*(len(taulad[t])),1+len(taulad[t])+(len(taulad[t])*t)),taulad[t],'.',color=color)
+        plt.plot(np.arange(1+t*(len(taulad[t])),1+len(taulad[t])+(len(taulad[t])*t)),np.nanmean(taulad[t])*np.ones(len(taulad[t])),'-',label="Average Decay Step "+str(t+1)+" ="+str(round(np.nanmean(taulad[t])))+" ms",color=color)
+    plt.legend()
+    plt.xlabel("Number of Cycle")
+    plt.ylabel("Time Constant (ms)")
+    plt.title(expdates[m]+" Time Constants of Each Cycle")
+    plt.show()
 m+=1
