@@ -67,7 +67,7 @@ mikron=u"\N{GREEK SMALL LETTER MU}"+"m"
 ###
 
 ## Main file of Expriment Data of text files -that converted from NI TDMS-
-main="D:/ahmed/RC experiments/Cu/Cu-Process/September/15-09-2021"
+main="D:/ahmed/RC experiments/Al/Al-Process/September/25-09-2021"
 ###
 
 file_list=[f.path for f in os.scandir(main) if f.is_dir()]
@@ -96,6 +96,7 @@ gage_chname="Voltage0"
 pos_chname="Actuator_Voltage"
 tip_ch=0
 sample_ch=1
+salla=0
 ## Search for Experiment Files that include Step Files ##
 for i in file_list:
     load=[[]]
@@ -128,11 +129,11 @@ for i in file_list:
                 f=open(k,"r")
                 for x in f:
                     load[n].append(float(x)*bit_to_load/1000)
-            elif(pos_chname in k):
-                position.append([])
-                f=open(k,"r")
-                for x in f:
-                    position[n].append(float(x))
+##            elif(pos_chname in k):
+##                position.append([])
+##                f=open(k,"r")
+##                for x in f:
+##                    position[n].append(float(x))
             elif("Temperature" in k):
                 if(tip_chname==k):
                     tip_ch=ch
@@ -162,8 +163,8 @@ for i in file_list:
                         voltage[n].append(float(x.split()[1])*gage2um)##um conversion
                 tcount+=1
         voltage[n]=medfilt(voltage[n],31)
-        if(n==0):
-            min_vol=min(voltage[0])
+        if((n==0) or 'Approach' in stepnames[n]):
+            min_vol=min(voltage[n])
         for t in range(len(voltage[n])):
             voltage[n][t]=voltage[n][t]-min_vol
             
@@ -175,8 +176,8 @@ for i in file_list:
             ## Find tolerances and averages of position and load to extract each cyle through data
 ## strain anchor points:
             sg_tol=0
-            plt.plot(voltage[n])
-            plt.show()
+##            plt.plot(voltage[n])
+##            plt.show()
 #            for t in range(1000):
 #                sg_tol+=abs(voltage[n][t]-voltage[n][t+1])
  #           sg_tol=sg_tol/1000
@@ -339,15 +340,15 @@ for i in file_list:
                     tempo=[]
             taular.append(taur)
             taulad.append(taud)
-            linpara, lincov=curve_fit(linear,np.arange(0,len(taur)),taur,check_finite=False,maxfev=100000,p0=[1,np.nanmean(taur)])
-            Linearfit=linear(np.arange(0,len(taur),0.1),*linpara)
-            plt.plot(np.arange(0,len(taur),0.1),Linearfit,label="Rise Linear Fit m="+str(round(linpara[0])))
-            plt.plot(np.arange(0,len(taur)),np.nanmean(taur)*np.ones(len(taur)),'r-',label="Average Rise ="+str(round(np.nanmean(taur)))+" ms")
-            plt.plot(np.arange(0,len(taud)),np.nanmean(taud)*np.ones(len(taud)),'b-',label="Average Decay ="+str(round(np.nanmean(taud)))+" ms")
-            plt.plot(taur,'r.',label="Rise TC")
-            plt.plot(taud,'b.',label="Decay TC")
-            plt.legend()
-            plt.show()
+##            linpara, lincov=curve_fit(linear,np.arange(0,len(taur)),taur,check_finite=False,maxfev=100000,p0=[1,np.nanmean(taur)])
+##            Linearfit=linear(np.arange(0,len(taur),0.1),*linpara)
+##            plt.plot(np.arange(0,len(taur),0.1),Linearfit,label="Rise Linear Fit m="+str(round(linpara[0])))
+##            plt.plot(np.arange(0,len(taur)),np.nanmean(taur)*np.ones(len(taur)),'r-',label="Average Rise ="+str(round(np.nanmean(taur)))+" ms")
+##            plt.plot(np.arange(0,len(taud)),np.nanmean(taud)*np.ones(len(taud)),'b-',label="Average Decay ="+str(round(np.nanmean(taud)))+" ms")
+##            plt.plot(taur,'r.',label="Rise TC")
+##            plt.plot(taud,'b.',label="Decay TC")
+##            plt.legend()
+##            plt.show()
             ## writing each cycle's TC to txt file
             with open(j+"/CyclesTCs.txt","w+") as q:
                 q.write(expdates[m]+" "+stepnames[n]+"\n"+"Rise TC (ms)\t\t\t Decay TC (ms)\n")
@@ -379,7 +380,8 @@ for i in file_list:
                 voltMean[n][p]=voltMean[n][p]/sayacs
             t=0
 #            print(lups[n])
-            plt.plot(tip[n])
+##            plt.plot(tip[n])
+##            plt.show()
             upss=lups[n]
             downss=ldws[n]
             lengvol=int(len(voltMean[n])/2)
@@ -445,6 +447,7 @@ for i in file_list:
     q.close()
     for t in stepnames:
         if('Oscillation' in t):
+            salla=1
             ared=tip[n]
             t0=np.linspace(0+(p*int(exp_per+1/daq_frq)),int(exp_per/2+(p*(exp_per+1/daq_frq))),int(osc_per/2))
             t02=np.linspace(int((exp_per/2+1/daq_frq)+(p*(exp_per+1/daq_frq))),int((exp_per+1/daq_frq)+(p*(exp_per+1/daq_frq))),int(osc_per/2))
@@ -491,19 +494,20 @@ for i in file_list:
         n+=1
     deltadep=[]
     deltaload=[]
-    for t in range(len(depthLoad)):
-        deltadep.append(depthLoad[t]-depthUnlod[t])
-    ax4.grid('True',axis='y',color='green')
-    ax1.grid('True',color='red')
-    inset.set_yticks(np.linspace(round(min(riseTcs)),round(max(riseTcs)),5))
-    l1,=inset.plot(depthLoad,riseTcs,'r.-',label="Rise TC vs Depth")
-    inset.set_xticks(depthLoad)
-    inset2.set_xticks(np.linspace(round(min(loadup)),round(max(loadup)),5))
-    #l2,=inset.plot(depthUnlod,decayTcs,'b.-',label="Decay TC vs Depth")
-    l3,=inset2.plot(loadup,riseTcs,'b.-',label="Rise TC vs Load")
-    #l4,=inset2.plot(loaddw,decayTcs,'g.-',label="Decay TC vs Load")
-    inset.legend(handles=[l1,l3],fontsize='x-small',frameon='False')
-#       ax1.legend()
+    if(salla==1): 
+        for t in range(len(depthLoad)):
+            deltadep.append(depthLoad[t]-depthUnlod[t])
+        ax4.grid('True',axis='y',color='green')
+        ax1.grid('True',color='red')
+        inset.set_yticks(np.linspace(round(min(riseTcs)),round(max(riseTcs)),5))
+        l1,=inset.plot(depthLoad,riseTcs,'r.-',label="Rise TC vs Depth")
+        inset.set_xticks(depthLoad)
+        inset2.set_xticks(np.linspace(round(min(loadup)),round(max(loadup)),5))
+        #l2,=inset.plot(depthUnlod,decayTcs,'b.-',label="Decay TC vs Depth")
+        l3,=inset2.plot(loadup,riseTcs,'b.-',label="Rise TC vs Load")
+        #l4,=inset2.plot(loaddw,decayTcs,'g.-',label="Decay TC vs Load")
+        inset.legend(handles=[l1,l3],fontsize='x-small',frameon='False')
+    #       ax1.legend()
     fig.tight_layout()
     plt.show()
     ###
@@ -521,4 +525,5 @@ for i in file_list:
     plt.ylabel("Time Constant (ms)")
     plt.title(expdates[m]+" Time Constants of Each Cycle")
     plt.show()
-m+=1
+    salla=0
+    m+=1
