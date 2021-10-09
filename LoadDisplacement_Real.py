@@ -64,7 +64,7 @@ mikron="\u03BC"
 ###
 
 ## Main file of Expriment Data of text files -that converted from NI TDMS-
-main="/Users/ahmeduluca/Desktop/Cu/Cu-Process/22-06-2021"
+main="/Users/ahmeduluca/Desktop/Cu/toPresent/Cone-Copper/ldtry"
 ###
 
 file_list=[f.path for f in os.scandir(main) if f.is_dir()]
@@ -87,6 +87,8 @@ totaldisp=[]
 totaltemp=[]
 totalload=[]
 totalpos=[]
+min_vol=0
+load_threshold=15
 ## Search for Experiment Files that include Step Files ##
 for i in file_list:
     load=[[]]
@@ -127,7 +129,7 @@ for i in file_list:
                         temp[n][ch].append(float(x.split()[1]))
                 tcount+=1
                 ch+=1                    
-            elif("Voltage" in k):
+            elif("Voltage0" in k):
                 voltage.append([])
                 if(tcount==0):
                     time.append([])
@@ -141,13 +143,22 @@ for i in file_list:
         ###
                 
         ## Load & Displacement & Temperatures vs Time of each Step separately ##
+        print (j)
         load[n]=medfilt(load[n],21)
         voltage[n]=medfilt(voltage[n],9)
         temp[n][1]=medfilt(temp[n][1],3)
-        if(n==0):
-            min_vol=min(voltage[0])
-        for t in range(len(voltage[n])):
-            voltage[n][t]=voltage[n][t]-min_vol
+        if('Retract' in stepnames[n]):
+            load_threshold+=load[n][-1]
+        if(('Indentation' in stepnames[n] and (n==0 or (n>0 and 'Retract' in stepnames[n-1])))or'Approach' in stepnames[n]):
+            oran=0
+            for a in range(len(load[n])):
+                if(load[n][a]>load_threshold):
+                    oran=1-(len(load[n])-a)/len(load[n])
+                    break
+            b=int(oran*len(voltage[n]))-1
+            min_vol=voltage[n][b]
+            for t in range(len(voltage[n])):
+                voltage[n][t]=voltage[n][t]-min_vol
         orta=int(len(voltage[n])/len(load[n]))
         p2=[]
         for t in range(0,len(voltage[n]),orta):
@@ -157,6 +168,8 @@ for i in file_list:
         if(artik==0):
             artik=1
         out=int(leng/artik)
+        if(out==0):
+            out=1
         bas=leng%artik
         for t in range(bas,leng,out):
             position[n]=np.concatenate((np.array(position[n]),p2[t:t+out-1]))
@@ -173,7 +186,7 @@ for i in file_list:
 ##        ax1.set_xlabel('Time (s)')
 ##        ax1.set_ylabel('Position (%sm)'%(mikron), color='g')
 ##        ax2.set_ylabel('Load (mN)', color='b')
-##        if("Indentation" in stepnames[n]):
+####        if("Indentation" in stepnames[n]):
 ##            ax3=ax1.twinx()
 ##            ax3.spines['right'].set_position(("axes",1.2))
 ##            p3,=ax3.plot(time[n],temp[n][1],'r.',ms=3,label="Tip Temperature %s = %.2f %s"%(deltasig,round(max(temp[n][1])-min(temp[n][1])),degcel))
@@ -190,78 +203,86 @@ for i in file_list:
 ##        plt.title(stepnames[n])
 ##        plt.show()
         ###
-
+        with open(os.path.join(j,"position_subtracted.txt"),"w") as q:
+            q.write("Position (Loadcell Movement Subtracted) um\n")                       
+            for t in range(len(position[n])):
+                q.write(str(position[n][t])+"\n")
+        q.close()
         ## Load vs Displacement Graph for each of Indent & Oscillation and corresponding Fits ##
-        fark=len(load[n])-len(position[n])
-        if(fark>0):
-            load[n]=load[n][:-fark]
-            plt.plot(position[n],load[n],'.')
-        elif(fark==0):
-            plt.plot(position[n],load[n],'.')
-        else:
-            position[n]=position[n][:fark]
-            plt.plot(position[n],load[n],'.')
-        loadav=np.mean(load[n])
-        loadmin=min(load[n])
-        loadmax=max(load[n])
-        dload=loadmax-loadmin
-        fitst=0
-        fitend=0
-        #if('Indentation' in stepnames[n]):
-##            if(n+1<len(stepnames) or n<1):
-##                for t in load[n]:
-##                    fitst+=1
-##                    if(t>loadmin+dload*0.025):
-##                        break
-##                for t in load[n]:
-##                    fitend+=1
-##                    if(t>loadmin+dload*0.9):
-##                        break
-##                curvest=0
-##                for t in load[n]:
-##                    curvest+=1
-##                    if(t>loadmin+dload*0.1):
-##                        break
-##                try:## Quadratic fit to load vs disp -> F=h**2
-##                    linpov,lincov=curve_fit(quad, position[n][fitst:fitend],load[n][fitst:fitend])
-##                    linfit=quad(position[n][curvest:fitend],*linpov)
-##                    plt.plot(position[n][curvest:fitend],linfit,label="(%.2f)$h^2$+(%.2f)h+(%.2f)"%(round(linpov[0],2),round(linpov[1],2),round(linpov[2],2)))
-##                except:
-##                    print("quadratic fit problem!")
-##            if(n>0 and n+1==len(stepnames)):
-##                for t in load[n]:
-##                    fitend+=1
-##                    if(t<loadmin+dload*0.75):
-##                        break
-##                try:## Linear fit to first 10% unloading load vs disp to obtain h_contact
-##                    fitst=int(fitend*0.1)
-##                    linpov,lincov=curve_fit(linear, position[n][fitst:fitend],load[n][fitst:fitend])
-##                    linstop=-1
-##                    for t in position[n][fitst:]:
-##                        linstop+=1
-##                        if (t<=(loadmin-linpov[1])/linpov[0]):
+        try:
+            fark=len(load[n])-len(position[n])
+            if(fark>0):
+                load[n]=load[n][:-fark]
+                plt.plot(position[n],load[n],'.')
+            elif(fark==0):
+                plt.plot(position[n],load[n],'.')
+            else:
+                position[n]=position[n][:fark]
+                plt.plot(position[n],load[n],'.')
+            loadav=np.mean(load[n])
+            loadmin=min(load[n])
+            loadmax=max(load[n])
+            dload=loadmax-loadmin
+            fitst=0
+            fitend=0
+##            if('Indentation' in stepnames[n] or "Approach" in stepnames[n] or "Retract" in stepnames[n]):
+##
+##                if(n+1<len(stepnames) or n<1):
+##                    for t in load[n]:
+##                        fitst+=1
+##                        if(t>loadmin+dload*0.025):
 ##                            break
-##                    linfit=linear(position[n][fitst:linstop],*linpov)
-##                    plt.plot(position[n][fitst:linstop],linfit,label="$h_{c}$=%f"%((loadmin-linpov[1])/linpov[0]))
-##                except:
-##                    print("Linear Fit Problem!")
-##        plt.xlabel("Displacement (%sm)"%(mikron))
-##        plt.ylabel("Load (mN)")
-        plt.grid('True')
-##        plt.title(stepnames[n]+" Load vs Displacement")
-##        plt.legend()
-##        plt.show()
-###
+##                    for t in load[n]:
+##                        fitend+=1
+##                        if(t>loadmin+dload*0.9):
+##                            break
+##                    curvest=0
+##                    for t in load[n]:
+##                        curvest+=1
+##                        if(t>loadmin+dload*0.1):
+##                            break
+##                    try:## Quadratic fit to load vs disp -> F=h**2
+##                        linpov,lincov=curve_fit(quad, position[n][fitst:fitend],load[n][fitst:fitend])
+##                        linfit=quad(position[n][curvest:fitend],*linpov)
+##                        plt.plot(position[n][curvest:fitend],linfit,label="(%.2f)$h^2$+(%.2f)h+(%.2f)"%(round(linpov[0],2),round(linpov[1],2),round(linpov[2],2)))
+##                    except:
+##                        print("quadratic fit problem!")
+##                if(n>0 and n+1==len(stepnames)):
+##                    for t in load[n]:
+##                        fitend+=1
+##                        if(t<loadmin+dload*0.75):
+##                            break
+##                    try:## Linear fit to first 10% unloading load vs disp to obtain h_contact
+##                        fitst=int(fitend*0.1)
+##                        linpov,lincov=curve_fit(linear, position[n][fitst:fitend],load[n][fitst:fitend])
+##                        linstop=-1
+##                        for t in position[n][fitst:]:
+##                            linstop+=1
+##                            if (t<=(loadmin-linpov[1])/linpov[0]):
+##                                break
+##                        linfit=linear(position[n][fitst:linstop],*linpov)
+##                        plt.plot(position[n][fitst:linstop],linfit,label="$h_{c}$=%f"%((loadmin-linpov[1])/linpov[0]))
+##                    except:
+##                        print("Linear Fit Problem!")
+##            plt.xlabel("Displacement (%sm)"%(mikron))
+##            plt.ylabel("Load (mN)")
+##            plt.grid('True')
+##            plt.title(stepnames[n]+" Load vs Displacement")
+##            plt.legend()
+##            plt.show()
+        except:
+            print(j + "Problems..")
+#
         
         ## Total Displacement - Load - Temperature vs Time through all steps Graph of Experiment ## !!LABELS for separating steps
-        if("Indentation" in stepnames[n]):
-            for t in range(len(voltage[n])):
-                totaldisp.append(voltage[n][t])
-                totaltemp.append(temp[n][1][t])
-            for t in range(len(load[n])):
-                totalload.append(load[n][t])
-            for t in range(len(position[n])):
-                totalpos.append(position[n][t])
+##        if("Indentation" in stepnames[n] or "Approach" in stepnames[n] or "Retract" in stepnames[n]):
+##            for t in range(len(voltage[n])):
+##                totaldisp.append(voltage[n][t])
+##                totaltemp.append(temp[n][1][t])
+##            for t in range(len(load[n])):
+##                totalload.append(load[n][t])
+##            for t in range(len(position[n])):
+##                totalpos.append(position[n][t])
         n+=1
         position.append([])
 ##    fig,ax1=plt.subplots()
@@ -281,10 +302,10 @@ for i in file_list:
 ##    ax1.grid("True",color='green')
 ##    ax1.legend(handles=[p1,p2,p3])
 ##    plt.show()
-    ### ++ Total Load vs Disp graph of Experiment through all steps!!
-    plt.title(expdates[m]+" Load Displacement")
-    plt.xlabel("Displacement ("+mikron+"m)")
-    plt.ylabel("Load (mN)")
-    plt.show()
+##    ### ++ Total Load vs Disp graph of Experiment through all steps!!
+##    plt.title(expdates[m]+" Load Displacement")
+##    plt.xlabel("Displacement ("+mikron+"m)")
+##    plt.ylabel("Load (mN)")
+##    plt.show()
     m+=1
 

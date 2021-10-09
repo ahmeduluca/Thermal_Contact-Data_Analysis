@@ -6,13 +6,18 @@ import shutil
 ## converts tdms files of experiment to txt & creates new processed file dirs with existing txts
 ## of exp_log &load &position files & txt converted TDMS group data
 
-# Give the file path to search experiment tdms&txt results:
-tdms_file_list=glob.glob("D:/ahmed/RC experiments/Cu/Foil/**/**/*.tdms")
-txt_file_list=glob.glob("D:/ahmed/RC experiments/Cu/Foil/**/**/*.txt")
-
-# Give the new processed file directory path
-process_dir="D:/ahmed/RC experiments/Cu/Cu-Process/Foil"
-
+### Give the file path to search experiment tdms&txt results:
+tdms_file_list=glob.glob("/Users/ahmeduluca/Desktop/Al/Al_Cone/10-09-2021/**/*.tdms") #MacFilePath
+txt_file_list=glob.glob("/Users/ahmeduluca/Desktop/Al/Al_Cone/10-09-2021/**/*.txt")
+process_dir="/Users/ahmeduluca/Desktop/Al/Al-Process/"
+cur_dir_txts=[]
+### Windows File Path
+##tdms_file_list=glob.glob("D:/ahmed/RC experiments/Cu/Foil/**/**/*.tdms")
+##txt_file_list=glob.glob("D:/ahmed/RC experiments/Cu/Foil/**/**/*.txt")
+##
+### Give the new processed file directory path
+##process_dir="D:/ahmed/RC experiments/Cu/Cu-Process/Foil"
+##
 # Walk through found TDMS files:
 for i in tdms_file_list:
     
