@@ -69,7 +69,8 @@ mikron=u"\N{GREEK SMALL LETTER MU}"+"m"
 
 ## Main file of Expriment Data of text files -that converted from NI TDMS-
 #main="D:/ahmed/RC experiments/Al/Al-Process/September/25-09-2021" #WindowsFilePath
-main="/Users/ahmeduluca/Desktop/Al/Al-Process/" #MacFilePath
+main="/Users/ahmeduluca/Desktop/download/process"
+ #MacFilePath
 ###
 
 file_list=[f.path for f in os.scandir(main) if f.is_dir()]
@@ -123,6 +124,8 @@ for i in file_list:
     for j in sub_dirs:
         load=[]
         position=[]
+        reduceT=[]
+        redtim=[]
         volt=[]
         voltaj=[]
         tempTip=[]
@@ -172,34 +175,180 @@ for i in file_list:
                 tcount+=1
                 f.close()
         volt=medfilt(voltaj,21)
-        if('Approach' in stepnames[n]):
-            oran=0
-            for a in range(len(load)):
-                if(load[a]>load_threshold):
-                    oran=1-(len(load)-a)/len(load)
-                    break
-            b=int(oran*len(volt))-1
-            min_vol=volt[b]
+        
+##Indentation load displacement graphs & timeconstant extraction trial through indentation stage
+        if('Indentation' in stepnames[n] or 'Calibration' in stepnames[n] or 'Approach' in stepnames[n] or 'Retract' in stepnames[n]):
+            volt=medfilt(volt,501)
+            if(len(load)>0):
+                load=medfilt(load,31)
+                a=0
+                for kuvvet in load:
+                    a+=1
+                    if(kuvvet>load_threshold):
+                        break
+                oran=1-(len(load)-a)/len(load)
+                b=int(oran*len(volt))-1
+                orta=int(len(volt)/len(load))
+            else:
+                b=0
+                orta=1
+            tempTip=medfilt(tempTip,21)
+            if(n==0 or (n>0 and 'Retract' in stepnames[n-1]) or 'Approach' in stepnames[n]):
+                min_vol=volt[b]
+            zz=0
+            if("Approach" in stepnames[n]):
+                mxpos=max(volt)
+                mnpos=min(volt)
+                dpoz=mxpos-mnpos
+                if(volt[b]>mnpos):
+                    for t in range(len(volt)-1,-1,-1):
+                        if(volt[t]-sg_tol<mnpos):
+                            zz=t
+                            break
+            zz=0
             for t in range(len(volt)):
                 volt[t]=volt[t]-min_vol
-
-        elif('Indentation' in stepnames[n] and (n==0 or (n>0 and 'Retract' in stepnames[n-1]))):
-            a=0
-            for kuvvet in load:
-                a+=1
-                if(kuvvet>load_threshold):
+            figs,axd=plt.subplots()
+            axd.set_title(stepnames[n]+" "+expdates[m].replace('_',' '))
+            if(len(load)>0):
+                axl=axd.twinx()
+                axl.plot(np.linspace(0,time[-1],len(load)),load,'.',color='cyan')
+                axl.set_ylabel("Load (mN)",color="cyan")
+                axl.tick_params(axis='y',labelcolor="cyan")
+            axt=axd.twinx()
+            axt.spines['right'].set_position(("outward",75))
+            axd.set_ylabel("Displacement (%s)"%mikron,color='orange')
+            axd.set_xlabel("Time (s)",color="black")
+            axt.set_ylabel("Tip Temperature (%s)"%degcel,color="red")
+            axd.tick_params(axis='y',labelcolor="orange")
+            axt.tick_params(axis='y',labelcolor="red")
+            axd.plot(time,volt,'.',color='orange')
+            axt.plot(time,tempTip,'r.')
+            figs.tight_layout()
+            plt.savefig(os.path.join(j,"TimevsLoad&Disp.png"),dpi=128)
+            plt.close()
+            
+            ## Reduced data for load vs graphs:
+            p2=[]
+            p3=[]
+            p4=[]
+            for t in range(0,int(len(volt)-orta/2),orta):
+                p2.append(volt[int(t+(orta/2))])
+                p3.append(tempTip[int(t+(orta/2))])
+                p4.append(time[int(t+(orta/2))])
+            if(len(load)>0):               
+                leng=len(p2)-1
+                artik=leng%len(load)
+                if(artik==0):
+                    artik=1
+                out=int(leng/artik)
+                if(out==0):
+                    out=1
+                bas=leng%artik
+            else:
+                bas=0
+                leng=len(p2)-1
+                out=1
+                artik=1
+            for t in range(bas,leng,out):
+                position=np.concatenate((np.array(position),p2[t:t+out-1]))
+                reduceT=np.concatenate((np.array(reduceT),p3[t:t+out-1]))
+                redtim=np.concatenate((np.array(redtim),p4[t:t+out-1]))
+            inc=0
+            gg=0
+            for t in range(len(position)):
+                position[t]=position[t]-load[t]/loadcell_stiffness
+            position=medfilt(position,101)
+            figs,axt=plt.subplots()
+            axt.set_title(stepnames[n]+" "+expdates[m].replace('_',' '))
+            axt.plot(position[zz:int(len(position))],reduceT[zz:int(len(position))],'r.')
+            if(len(load)>0):
+                axd=axt.twinx()
+                axd.plot(position[zz:int(len(position))],load[zz:int(len(position))],'b.')
+            plt.savefig(os.path.join(j,"LoadvsDisp.png"),dpi=128)
+            plt.close()
+            maxT=max(tempTip)
+            minT=min(tempTip)
+            #steps of actuator are at each 100ms...for starting time/100 maybe tried
+            dTemp=0.2
+            number=(maxT-minT)/dTemp
+##            lastpt=np.where(tempTip<=minT)
+##            lastpt=int(lastpt[0][-1])
+            lastpt=b
+            tim=[]
+            say=0
+            tautr=[]
+            tautd=[]
+            starttime=time[b]
+            for t in range(lastpt,len(tempTip)):
+                if(tempTip[t]==maxT):
+                    starttime=time[t]
+                    say=0
                     break
-            oran=1-(len(load)-a)/len(load)
-            b=int(oran*len(volt))-1
-            min_vol=volt[b]
-            for t in range(len(volt)):
-                volt[t]=volt[t]-min_vol
+                if(time[t]==starttime+2*(say+1)):
+                    ared=tempTip[lastpt:t]
+                    tims=time[lastpt:t]
+                    if(len(tims)>1):
+                        mt=min(tims)
+                        tim=[(tims[a]-mt)*1000 for a in range(len(tims))]
+                        try:
+                            para, covs =curve_fit(rise,tim,ared,maxfev=100000,p0=[dTemp,500,minT])
+                            tautr.append(para[1])
+                        except:
+                            say=say
+                        Risefit=rise(np.array(tim), *para)
+                        #plt.plot(tim,Risefit)
+                        #plt.plot(tim,ared)
+                        #plt.show()
+                    lastpt=t+1
+                    say+=1
+            for t in range(lastpt,len(tempTip)):
+                if(tempTip[t]==minT):
+                            break
+                if(time[t]==starttime+2*(say+1)):
+                    ared=tempTip[lastpt:t]
+                    tims=time[lastpt:t]
+                    if(len(tims)>1):
+                        mt=min(tims)
+                        tim=[(tims[a]-mt)*1000 for a in range(len(tims))]
+                        try:
+                            para, covs =curve_fit(decay,tim,ared,maxfev=100000,p0=[dTemp,500,maxT])
+                            tautd.append(para[1])
+                        except:
+                            say=say
+                        DecayFit=decay(np.array(tim), *para)
+                        #plt.plot(tim,DecayFit)
+                        #plt.plot(tim,ared)
+                        #plt.show()
+                    lastpt=t+1
+                    say+=1
+ #           plt.show()
+            #plt.plot(tautr,'.')
+            #plt.plot(tautd,'.')
+            #plt.show()
+            results_files[n]=j+"/ForceDisplacement.txt"
+            with open (results_files[n],"w+",encoding="utf-8") as dr:
+                dr.write(expdates[m]+" "+stepnames[n]+"\n"+"Time (s)\tDisplacement ("+ mikron+ ")\tLoad (mN)\tTip Temperature ("+degcel+")\n" )
+                for p in range(len(position)):
+                    dr.write(str(redtim[p])+"\t"+str(position[p])+"\t"+str(load[p])+"\t"+str(reduceT[p])+"\n")
+            dr.close()
+            with open(j+"/RisingTCs.txt","w+",encoding='utf-8') as q:
+                q.write(expdates[m]+" "+stepnames[n]+"\n"+"Time (s)\t\tDepth (um)\t\tLoad (mN)\t\tTime Constant (ms)\n")
+                for t in range (len(tautr)):
+                    q.write(str(tautr[t])+"\n")
+            q.close()
+            with open(j+"/DecayingTCs.txt","w+",encoding='utf-8') as q:
+                q.write(expdates[m]+" "+stepnames[n]+"\n"+"Time (s)\t\tDepth (um)\t\tLoad (mN)\t\tTime Constant (ms)\n")
+                for t in range (len(tautd)):
+                    q.write(str(tautd[t])+"\n")
+            q.close()
+            if('Retract' in stepnames[n]):
+                if(len(load)>11):
+                    load=medfilt(load,21)
+                    load_threshold+=load[-1]
 
-        elif('Retract' in stepnames[n]):
-            if(len(load)>11):
-                load=medfilt(load,11)
-                load_threshold+=load[-1]
-        ## Data Process for oscillation cycles -> averaging & time constant extract
+                    
+## Data Process for oscillation cycles -> averaging & time constant extract
         elif('Oscillation' in stepnames[n]):
             ##Median filter of load to filter incident changes
             if(len(load)>300):
@@ -464,9 +613,9 @@ for i in file_list:
     depthLoad=[]
     depthUnlod=[]
     fig,ax1=plt.subplots()
+    ax1.set_title("Averages of Cycles: "+expdates[m].replace('_',' '))
     fig.set_size_inches(10.0,7.5)
     fig.subplots_adjust(right=0.6)
-#    fig.tight_layout()
     ax2=ax1.twinx()
     ax3=ax1.twinx()
     ax3.spines['right'].set_position(("outward",75))
@@ -491,7 +640,6 @@ for i in file_list:
 #    inset2=inset.twiny()
 #    inset2.set_xlabel("Load (mN)",color="blue")
 #    inset2.tick_params(axis='x',labelcolor="blue")
-    ax1.set_title("Averages of Cycles: "+expdates[m].replace('_',' '))
     n=0
     p=0
     riseTcs=[]
@@ -570,18 +718,18 @@ for i in file_list:
             depthLoad.append(np.nanmean(vGag[int(len(vGag)/2):]))
             depthUnlod.append(np.nanmean(vGag[:int(len(vGag)/2)]))
         n+=1
-    deltadep=[]
-    deltaload=[]
-    ax4.grid('True',axis='y',color='green')
-    ax1.grid('True',color='red')
-    ax1.legend(loc=2,fontsize='x-small')##Uncomment/Comment out for tau plot inset/separate state
-    try:
-        fig.tight_layout()##Uncomment/Comment out for tau plot inset/separate state
-    except:
-        continue
-    plt.savefig(os.path.join(i,"AverageGraph.png"),dpi=1024)##Uncomment/Comment out for tau plot inset/separate state
-    plt.close()    ##Uncomment/Comment out for tau plot inset/separate state
     if(salla==1):
+        deltadep=[]
+        deltaload=[]
+        ax4.grid('True',axis='y',color='green')
+        ax1.grid('True',color='red')
+        ax1.legend(loc=2,fontsize='x-small')##Uncomment/Comment out for tau plot inset/separate state
+        try:
+            fig.tight_layout()##Uncomment/Comment out for tau plot inset/separate state
+        except:
+            continue
+        plt.savefig(os.path.join(i,"AverageGraph.png"),dpi=1024)##Uncomment/Comment out for tau plot inset/separate state
+        plt.close()    ##Uncomment/Comment out for tau plot inset/separate state
         fig=plt.figure()##Uncomment/Comment out for tau plot inset/separate state
         inset=fig.add_subplot(111,label="1")
         inDec=fig.add_subplot(111,label="2",frame_on=False)
@@ -657,47 +805,126 @@ for i in file_list:
         [bars.set_alpha(0.3) for bars in l4[1]]
         fig.legend(handles=[l1,l2,l3,l4],fontsize='x-small',ncol=2,mode='expand',loc=2)
         fig.suptitle(" Time Constants of Averages of the Cycles: "+expdates[m].replace('_',' '),fontsize='small')
-    try:
-        fig.tight_layout()
-    except:
-        continue
-    plt.savefig(os.path.join(i,"avTCGraph.png"),dpi=512)##Uncomment/Comment out for tau plot inset/separate state
-    plt.close()
+        try:
+            fig.tight_layout()
+        except:
+            continue
+        plt.savefig(os.path.join(i,"avTCGraph.png"),dpi=512)##Uncomment/Comment out for tau plot inset/separate state
+        plt.close()
     ###
-    
-    ## Writing rise tau vs depth & load to file
-    with open(i+"/riseTC_disp_load.txt","w",encoding="utf-8") as q:
-        q.write("Time Constant (ms)\tDepth ("+mikron+")\tLoad (mN)\n")
-        for t in range(len(riseTcs)):
-            q.write(str(riseTcs[t])+"\t"+str(depthLoad[t])+"\t"+str(loadup[t])+"\n")
-    q.close()
-    ## Writing decay tau vs depth & load to file
-    with open(i+"/decayTC_disp_load.txt","w",encoding="utf-8") as q:
-        q.write("Time Constant (ms)\tDepth (%s)\tLoad (mN)\n"%mikron)
-        for t in range(len(decayTcs)):
-            q.write(str(decayTcs[t])+"\t"+str(depthUnlod[t])+"\t"+str(loaddw[t])+"\n")
-    q.close()
-    
+        ## Writing rise tau vs depth & load to file
+        with open(i+"/riseTC_disp_load.txt","w",encoding="utf-8") as q:
+            q.write("Time Constant (ms)\tDepth ("+mikron+")\tLoad (mN)\n")
+            for t in range(len(riseTcs)):
+                q.write(str(riseTcs[t])+"\t"+str(depthLoad[t])+"\t"+str(loadup[t])+"\n")
+        q.close()
+        ## Writing decay tau vs depth & load to file
+        with open(i+"/decayTC_disp_load.txt","w",encoding="utf-8") as q:
+            q.write("Time Constant (ms)\tDepth (%s)\tLoad (mN)\n"%mikron)
+            for t in range(len(decayTcs)):
+                q.write(str(decayTcs[t])+"\t"+str(depthUnlod[t])+"\t"+str(loaddw[t])+"\n")
+        q.close()
     ## Plot of each cycle's tau of whole experiment's oscillations
-    ax=plt.gca()
-    fig,plto=plt.subplots()
-    for t in range(len(taular)):
-        print(t)
-        color=next(ax._get_lines.prop_cycler)['color']
-        risedots=np.arange(1+t*(len(taular[t])),1+len(taular[t])+(len(taular[t])*t))
-        plto.plot(risedots,taular[t],'.',color=color)
-        riseav=np.nanmean(taular[t])*np.ones(len(taular[t]))
-        plto.plot(risedots,riseav,'-',label="Average Rise Step "+str(t+1)+" ="+str(np.floor(np.nanmean(taular[t])))+" ms",color=color)
-        color=next(ax._get_lines.prop_cycler)['color']
-        decaydots=np.arange(1+t*(len(taulad[t])),1+len(taulad[t])+(len(taulad[t])*t))
-        plto.plot(decaydots,taulad[t],'.',color=color)
-        decayav=np.nanmean(taulad[t])*np.ones(len(taulad[t]))
-        plto.plot(decaydots,decayav,'-',label="Average Decay Step "+str(t+1)+" ="+str(np.floor(np.nanmean(taulad[t])))+" ms",color=color)
-    plto.legend()
-    plto.set_xlabel("Number of Cycle")
-    plto.set_ylabel("Time Constant (ms)")
-    plto.set_title(expdates[m]+" Time Constants of Each Cycle")
-    plt.savefig(os.path.join(i,"allTCGraph.png"),dpi=512)
-    plt.close()
+        ax=plt.gca()
+        fig,plto=plt.subplots()
+        for t in range(len(taular)):
+            print(t)
+            color=next(ax._get_lines.prop_cycler)['color']
+            risedots=np.arange(1+t*(len(taular[t])),1+len(taular[t])+(len(taular[t])*t))
+            plto.plot(risedots,taular[t],'.',color=color)
+            riseav=np.nanmean(taular[t])*np.ones(len(taular[t]))
+            plto.plot(risedots,riseav,'-',label="Average Rise Step "+str(t+1)+" ="+str(np.floor(np.nanmean(taular[t])))+" ms",color=color)
+            color=next(ax._get_lines.prop_cycler)['color']
+            decaydots=np.arange(1+t*(len(taulad[t])),1+len(taulad[t])+(len(taulad[t])*t))
+            plto.plot(decaydots,taulad[t],'.',color=color)
+            decayav=np.nanmean(taulad[t])*np.ones(len(taulad[t]))
+            plto.plot(decaydots,decayav,'-',label="Average Decay Step "+str(t+1)+" ="+str(np.floor(np.nanmean(taulad[t])))+" ms",color=color)
+        plto.legend()
+        plto.set_xlabel("Number of Cycle")
+        plto.set_ylabel("Time Constant (ms)")
+        plto.set_title(expdates[m]+" Time Constants of Each Cycle")
+        plt.savefig(os.path.join(i,"allTCGraph.png"),dpi=512)
+        plt.close()
+    else:
+        plt.close()
     salla=0
+#all-in-one displacement vs load&temperature graphs double yaxis multi x axis-subplots
+#all-in-one time vs disp&load&temperature graph triple yaxis sole x axis
+    n=0
+    p=0
+    inden=0
+    tDis=[]
+    tLoad=[]
+    tTip=[]
+    axt=[]
+    for t in stepnames:
+        if('Indentation' in t or 'Retract' in t):
+            p+=1
+    figs =plt.figure()
+    common=figs.add_subplot(111,label='1')
+    com1=figs.add_subplot(111,label='2')
+    com1.sharex(common)
+    common.set_xlabel('Displacement (%s)'%mikron)
+    common.spines['top'].set_color('none')
+    common.spines['bottom'].set_color('none')
+    common.tick_params(top=False, bottom=False, right=False)
+    com1.spines['top'].set_color('none')
+    com1.spines['bottom'].set_color('none')
+    com1.tick_params(top=False, bottom=False, left=False)
+    for t in range(p):
+        axt.append(figs.add_subplot(1,p,t+1))
+        if(t>0):
+            axt[t].sharey(axt[0])
+    figs.set_size_inches(p*2.0,6)
+    axd=[]
+    for t in range(p):
+        axd.append(axt[t].twinx())
+        if(t>0):
+            axd[t].sharey(axd[0])
+            axt[t].spines['left'].set_color('none')
+            axt[t].spines['right'].set_color('none')
+        axt[t].spines['top'].set_color('none')
+        if(t<p-1):
+            axd[t].spines['left'].set_color('none')
+            axd[t].spines['right'].set_color('none')
+        axd[t].spines['top'].set_color('none')
+        axd[t].tick_params(left=False, right=False)
+        axt[t].tick_params(right=False, left=False)
+    figs.suptitle("Temperature and Load vs Displacement: "+expdates[m].replace('_',' '))
+    common.set_ylabel("Tip Temperature (%s)"%degcel,color='r')
+    com1.set_ylabel("Load (mN)",color="blue")
+    common.sharey(axt[0])
+    com1.sharey(axd[0])
+    com1.grid('True',axis='y',color='blue')
+    common.grid('True',axis='y',color='red')
+    p=0
+    for t in stepnames:
+        if('Indentation' in t or 'Approach' in t or 'Retract' in t):
+            inden=1
+            if('Indentation' in t and n>0 and 'Approach' in stepnames[n-1]):
+                zz=0
+            else:
+                tDis=[]
+                tLoad=[]
+                tTip=[]
+            zz=0
+            with open(results_files[n], 'r',encoding='utf-8') as res:
+                rows=res.readlines()[2:]
+                for x in rows:
+                    tDis.append(float(x.split()[1]))
+                    tLoad.append(float(x.split()[2]))
+                    tTip.append(float(x.split()[3]))
+            res.close()
+            if('Approach' in t):
+                zz=0
+            else:
+                axt[p].plot(tDis[zz:int(len(tDis))],tTip[zz:int(len(tDis))],'r.')
+                if(len(tLoad)>0):
+                    axd[p].plot(tDis[zz:int(len(tDis))],tLoad[zz:int(len(tDis))],'b.')
+                p+=1
+        n+=1
+    if(inden==1):
+        figs.tight_layout()
+        plt.savefig(os.path.join(i,"LoadvsDisp.png"),dpi=256)
+        plt.close()
     m+=1

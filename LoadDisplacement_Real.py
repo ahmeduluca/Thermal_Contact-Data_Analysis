@@ -157,8 +157,8 @@ for i in file_list:
                     break
             b=int(oran*len(voltage[n]))-1
             min_vol=voltage[n][b]
-            for t in range(len(voltage[n])):
-                voltage[n][t]=voltage[n][t]-min_vol
+        for t in range(len(voltage[n])):
+            voltage[n][t]=voltage[n][t]-min_vol
         orta=int(len(voltage[n])/len(load[n]))
         p2=[]
         for t in range(0,len(voltage[n]),orta):

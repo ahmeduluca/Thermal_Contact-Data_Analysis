@@ -7,9 +7,9 @@ import shutil
 ## of exp_log &load &position files & txt converted TDMS group data
 
 ### Give the file path to search experiment tdms&txt results:
-tdms_file_list=glob.glob("/Users/ahmeduluca/Desktop/Al/Al_Cone/10-09-2021/**/*.tdms") #MacFilePath
-txt_file_list=glob.glob("/Users/ahmeduluca/Desktop/Al/Al_Cone/10-09-2021/**/*.txt")
-process_dir="/Users/ahmeduluca/Desktop/Al/Al-Process/"
+tdms_file_list=glob.glob("/Users/ahmeduluca/Desktop/download/22-10-2021/**/*.tdms") #MacFilePath
+txt_file_list=glob.glob("/Users/ahmeduluca/Desktop/download/22-10-2021/**/*.txt")
+process_dir="/Users/ahmeduluca/Desktop/download/process"
 cur_dir_txts=[]
 ### Windows File Path
 ##tdms_file_list=glob.glob("D:/ahmed/RC experiments/Cu/Foil/**/**/*.tdms")
