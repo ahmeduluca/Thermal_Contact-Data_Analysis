@@ -28,7 +28,7 @@ load_threshold=15 ##mN loadcell sensitivity for touch
 terr=1.1#error for temperature
 
 ###
-exp_per=4000 ##millisec
+exp_per=4200 ##millisec
 daq_frq=0.2 ##kHz
 osc_per=exp_per*daq_frq
 load_files=[]
@@ -69,7 +69,7 @@ mikron=u"\N{GREEK SMALL LETTER MU}"+"m"
 
 ## Main file of Expriment Data of text files -that converted from NI TDMS-
 #main="D:/ahmed/RC experiments/Al/Al-Process/September/25-09-2021" #WindowsFilePath
-main="/Users/ahmeduluca/Desktop/download/process"
+main="/Volumes/AhmedUluca/Indenter_Data/RC-EXP_RESULTS/present_diaParticle/Al"
  #MacFilePath
 ###
 
@@ -93,8 +93,8 @@ t2=[]
 tempo=[]
 sg=[]
 file_list.sort()
-tip_chname="Temperature2"
-sample_chname='Temperature3'
+tip_chname="Temperature9"
+sample_chname='Temperature12'
 gage_chname="Voltage0"
 pos_chname="Actuator_Voltage"
 salla=0
@@ -861,42 +861,68 @@ for i in file_list:
         if('Indentation' in t or 'Retract' in t):
             p+=1
     figs =plt.figure()
+    figs.suptitle("Temperature and Load vs Displacement: "+expdates[m].replace('_',' '),fontsize=16,y=1.)
     common=figs.add_subplot(111,label='1')
-    com1=figs.add_subplot(111,label='2')
-    com1.sharex(common)
+    com1=common.twinx()
     common.set_xlabel('Displacement (%s)'%mikron)
-    common.spines['top'].set_color('none')
-    common.spines['bottom'].set_color('none')
-    common.tick_params(top=False, bottom=False, right=False)
-    com1.spines['top'].set_color('none')
-    com1.spines['bottom'].set_color('none')
-    com1.tick_params(top=False, bottom=False, left=False)
+    common.tick_params(color='white',top=False, bottom=False, right=False, left=False)
+    com1.spines['bottom'].set_color('white')
+    com1.tick_params(color='white',top=False, bottom=False, left=False,right=False)
     for t in range(p):
-        axt.append(figs.add_subplot(1,p,t+1))
-        if(t>0):
-            axt[t].sharey(axt[0])
-    figs.set_size_inches(p*2.0,6)
+        if(9>p>4):
+            axt.append(figs.add_subplot(2,4,t+1))
+##            if(4>t>0):
+##                axt[t].sharey(axt[0])
+##            elif(t>4):
+##                axt[t].sharey(axt[4])
+        elif(13>p>8):
+            axt.append(figs.add_subplot(3,4,t+1))
+##            if(4>t>0):
+##                axt[t].sharey(axt[0])
+##            elif(9>t>4):
+##                axt[t].sharey(axt[4])
+##            elif(t>8):
+##                axt[t].sharey(axt[8])
+        elif(17>p>12):
+            axt.append(figs.add_subplot(4,4,t+1))
+##            if(4>t>0):
+##                axt[t].sharey(axt[0])
+##            elif(9>t>4):
+##                axt[t].sharey(axt[4])
+##            elif(13>t>8):
+##                axt[t].sharey(axt[8])
+##            elif(17>t>12):
+##                axt[t].sharey(axt[12])
+        else:            
+            axt.append(figs.add_subplot(1,p,t+1))
+##            if(t>0):
+##                axt[t].sharey(axt[0])
+    figs.set_size_inches(p*2.0,6*int(np.ceil(p/4)))
     axd=[]
     for t in range(p):
         axd.append(axt[t].twinx())
-        if(t>0):
-            axd[t].sharey(axd[0])
-            axt[t].spines['left'].set_color('none')
-            axt[t].spines['right'].set_color('none')
-        axt[t].spines['top'].set_color('none')
-        if(t<p-1):
-            axd[t].spines['left'].set_color('none')
-            axd[t].spines['right'].set_color('none')
-        axd[t].spines['top'].set_color('none')
-        axd[t].tick_params(left=False, right=False)
-        axt[t].tick_params(right=False, left=False)
-    figs.suptitle("Temperature and Load vs Displacement: "+expdates[m].replace('_',' '))
+##        if(t>0):
+##            axd[t].sharey(axd[0])
+###        axt[t].get_yaxis().set_visible(False)
+        axt[t].spines['left'].set_color('red')
+        axd[t].spines['right'].set_color('blue')
+        axd[t].tick_params(color='blue', left=False, right=True)
+        axt[t].tick_params(color='red', right=False, left=True)
+        axt[t].grid('True',axis='y',color='blue')
+        axd[t].grid('True',axis='y',color='red')
+    common.set_xticks([])
+    com1.set_xticks([])
+    common.set_yticks([])
+    com1.set_yticks([])
     common.set_ylabel("Tip Temperature (%s)"%degcel,color='r')
     com1.set_ylabel("Load (mN)",color="blue")
-    common.sharey(axt[0])
-    com1.sharey(axd[0])
-    com1.grid('True',axis='y',color='blue')
-    common.grid('True',axis='y',color='red')
+    common.spines['left'].set_position(("outward",50))
+    common.spines['bottom'].set_position(("outward",50))
+    com1.spines['right'].set_position(("outward",50))
+#    common.sharey(axt[0])
+ #   com1.sharey(axd[0])
+ #   com1.grid('True',axis='y',color='blue')
+ #   common.grid('True',axis='y',color='red')
     p=0
     for t in stepnames:
         if('Indentation' in t or 'Approach' in t or 'Retract' in t):
@@ -918,13 +944,20 @@ for i in file_list:
             if('Approach' in t):
                 zz=0
             else:
-                axt[p].plot(tDis[zz:int(len(tDis))],tTip[zz:int(len(tDis))],'r.')
-                if(len(tLoad)>0):
-                    axd[p].plot(tDis[zz:int(len(tDis))],tLoad[zz:int(len(tDis))],'b.')
+                try:                       
+                    axt[p].plot(tDis[zz:int(len(tDis))],tTip[zz:int(len(tDis))],'r.')
+                    xtik=np.around(np.linspace(np.floor(min(tDis)-0.5),np.floor(max(tDis)+0.5),4),decimals=1)
+                    axt[p].set_xticks(xtik)
+                    axt[p].set_title(t)
+                    if(len(tLoad)>0):
+                        axd[p].plot(tDis[zz:int(len(tDis))],tLoad[zz:int(len(tDis))],'b.')
+                except:
+                    print("load-disp-problem on"+t)
                 p+=1
         n+=1
     if(inden==1):
         figs.tight_layout()
+        fig.subplots_adjust(top=(0.88-0.1*(p/9)))
         plt.savefig(os.path.join(i,"LoadvsDisp.png"),dpi=256)
         plt.close()
     m+=1
