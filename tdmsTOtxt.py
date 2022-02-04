@@ -7,9 +7,9 @@ import shutil
 ## of exp_log &load &position files & txt converted TDMS group data
 
 ### Give the file path to search experiment tdms&txt results:
-tdms_file_list=glob.glob("/Users/ahmeduluca/Desktop/download/22-10-2021/**/*.tdms") #MacFilePath
-txt_file_list=glob.glob("/Users/ahmeduluca/Desktop/download/22-10-2021/**/*.txt")
-process_dir="/Users/ahmeduluca/Desktop/download/process"
+tdms_file_list=glob.glob("/Volumes/AhmedUluca/Indenter_Data/FusedSilicaNov/**/**/*.tdms") #MacFilePath
+txt_file_list=glob.glob("//Volumes/AhmedUluca/Indenter_Data/FusedSilicaNov/**/**/*.txt")
+process_dir="/Volumes/AhmedUluca/Indenter_Data/FusedProcess"
 cur_dir_txts=[]
 ### Windows File Path
 ##tdms_file_list=glob.glob("D:/ahmed/RC experiments/Cu/Foil/**/**/*.tdms")
@@ -76,6 +76,9 @@ for i in tdms_file_list:
                 elif 'Oscillation' in gurup:
                     gu, rup=gurup.split('Oscillation')
                     indent=0
+                elif 'Preview' in gurup:
+                    gu, rup=gurup.split('Preview')
+                    indent=5
                 else:
                     gu, rup= "","" ## This TDMS file does not belong to our experiment!
                     print("NOT AN INDENTATION TDMS DATA")
@@ -96,6 +99,8 @@ for i in tdms_file_list:
                     if(indent==3 and 'Calibration' in k):
                         shutil.copy(k, savegroup)
                     if(indent==4 and 'Retract' in k):
+                        shutil.copy(k, savegroup)
+                    if(indent==5 and 'Preview' in k):
                         shutil.copy(k, savegroup)
 
             ## Save tdms data of channels of groups as txt format

@@ -18,9 +18,27 @@ import math
 This code is for reading experimental data of Indenter/RC Thermal setup obtained by
 NI-DAQ written/converted txt data files are being searched as txt. 
 """
+##Special Characters##
+degsin=u"\N{DEGREE SIGN}"
+degcel=degsin+"C"
+deltasig=u"\N{GREEK CAPITAL LETTER DELTA}"
+mikron=u"\N{GREEK SMALL LETTER MU}"+"m"
+###
+
+## Main file of Expriment Data of text files -that converted from NI TDMS-
+#main="D:/ahmed/RC experiments/Al/Al-Process/September/25-09-2021" #WindowsFilePath
+main="/Volumes/AhmedUluca/Indenter_Data/FusedProcess"
+ #MacFilePath
+###
+
+tip_chname="Temperature2"
+sample_chname='Temperature3'
+gage_chname="Voltage0"
+pos_chname="Actuator_Voltage"
+
 ## Calibration constants of Experiment ##
-lc_mass_cal=4.75
-grave=9.81
+lc_mass_cal= 4.75#1000
+grave=9.81#1
 bit_to_load=lc_mass_cal*grave
 loadcell_stiffness=536.5 ##mN/um
 gage2um=10 ##um/V
@@ -28,7 +46,7 @@ load_threshold=15 ##mN loadcell sensitivity for touch
 terr=1.1#error for temperature
 
 ###
-exp_per=4200 ##millisec
+exp_per=4000 ##millisec
 daq_frq=0.2 ##kHz
 osc_per=exp_per*daq_frq
 load_files=[]
@@ -58,20 +76,56 @@ def inverse(x,m,c):
 
 def quad(x,a,b,c):
     return a*x**2+b*x+c
+
+def oliver(h,A,f,m):
+    return A*(h-f)**m
+
+def gradien(arr,inter,thresh):
+    counter=0
+    for i in range(0,len(arr)):
+        if(arr[i]+thresh<arr[i+1]):
+            if(counter>=0):
+                counter+=1
+            else:
+                counter=0
+        elif(arr[i]-thresh>arr[i+1]):
+            if(counter<=0):
+                counter-=1
+            else:
+                counter=0
+        if(counter>inter and inter>0):
+            return i-inter+1
+            break
+        elif(counter<inter and inter<0):
+            return i+inter+1
+            break
+        elif(i==len(arr)-2):
+            return int(1)
+            break
+
+def indexFinder(arr,condition,value,start=0,stop=0):
+    if(stop==0):
+        stop=len(arr)
+    for i in range(start,stop):
+        if(condition==0):
+            if(arr[i]==value):
+                return i
+        elif(condition==1):
+            if(arr[i]>value):
+                return i
+        elif(condition==2):
+            if(arr[i]<value):
+                return i
+        elif(condition==3):
+            if(arr[i]>=value):
+                return i
+        elif(condition==4):
+            if(arr[i]<=value):
+                return i
+        
 ###
 
-##Special Characters##
-degsin=u"\N{DEGREE SIGN}"
-degcel=degsin+"C"
-deltasig=u"\N{GREEK CAPITAL LETTER DELTA}"
-mikron=u"\N{GREEK SMALL LETTER MU}"+"m"
-###
 
-## Main file of Expriment Data of text files -that converted from NI TDMS-
-#main="D:/ahmed/RC experiments/Al/Al-Process/September/25-09-2021" #WindowsFilePath
-main="/Volumes/AhmedUluca/Indenter_Data/RC-EXP_RESULTS/present_diaParticle/Al"
- #MacFilePath
-###
 
 file_list=[f.path for f in os.scandir(main) if f.is_dir()]
 file_list.sort()
@@ -93,10 +147,6 @@ t2=[]
 tempo=[]
 sg=[]
 file_list.sort()
-tip_chname="Temperature9"
-sample_chname='Temperature12'
-gage_chname="Voltage0"
-pos_chname="Actuator_Voltage"
 salla=0
 load=[]
 position=[]
@@ -140,8 +190,11 @@ for i in file_list:
             if("Load" in k):
                 load=[]
                 f=open(k,"r",encoding='ascii')
+                spl=0
+                if(len(f.readline().split())>1):
+                   spl=1
                 for x in f:
-                    load.append(float(x)*bit_to_load/1000)
+                    load.append(float(x.split()[spl])*bit_to_load/1000)
                 f.close()
 ##            elif(pos_chname in k):
 ##                f=open(k,"r")
@@ -174,13 +227,25 @@ for i in file_list:
                         voltaj.append(float(x.split()[1])*gage2um)##um conversion
                 tcount+=1
                 f.close()
-        volt=medfilt(voltaj,21)
-        
+        if(len(load)<1):
+            load.append(0)
+        if(len(time)<1):
+            time.append(0)
+        if(len(tempTip)<1):
+            tempTip=np.zeros(len(time))
+        if(len(tempSample)<1):
+            tempSample=np.zeros(len(time))
+        if(len(voltaj)<1):
+            voltaj=np.zeros(len(time))
+            volt=voltaj
+        else:
+            volt=medfilt(voltaj,21)
 ##Indentation load displacement graphs & timeconstant extraction trial through indentation stage
         if('Indentation' in stepnames[n] or 'Calibration' in stepnames[n] or 'Approach' in stepnames[n] or 'Retract' in stepnames[n]):
-            volt=medfilt(volt,501)
+            if(len(voltaj)>101):
+                volt=medfilt(volt,501)
             if(len(load)>0):
-                load=medfilt(load,31)
+                #load=medfilt(load,31)
                 a=0
                 for kuvvet in load:
                     a+=1
@@ -215,15 +280,15 @@ for i in file_list:
                 axl.plot(np.linspace(0,time[-1],len(load)),load,'.',color='cyan')
                 axl.set_ylabel("Load (mN)",color="cyan")
                 axl.tick_params(axis='y',labelcolor="cyan")
-            axt=axd.twinx()
-            axt.spines['right'].set_position(("outward",75))
+            axt=axd.twinx()#
+            axt.spines['right'].set_position(("outward",75))#
             axd.set_ylabel("Displacement (%s)"%mikron,color='orange')
             axd.set_xlabel("Time (s)",color="black")
-            axt.set_ylabel("Tip Temperature (%s)"%degcel,color="red")
+            axt.set_ylabel("Tip Temperature (%s)"%degcel,color="red")#
             axd.tick_params(axis='y',labelcolor="orange")
-            axt.tick_params(axis='y',labelcolor="red")
+            axt.tick_params(axis='y',labelcolor="red")#
             axd.plot(time,volt,'.',color='orange')
-            axt.plot(time,tempTip,'r.')
+            axt.plot(time,tempTip,'r.')#
             figs.tight_layout()
             plt.savefig(os.path.join(j,"TimevsLoad&Disp.png"),dpi=128)
             plt.close()
@@ -260,11 +325,13 @@ for i in file_list:
                 position[t]=position[t]-load[t]/loadcell_stiffness
             position=medfilt(position,101)
             figs,axt=plt.subplots()
-            axt.set_title(stepnames[n]+" "+expdates[m].replace('_',' '))
-            axt.plot(position[zz:int(len(position))],reduceT[zz:int(len(position))],'r.')
+            #axt.plot(position[zz:int(len(position))],reduceT[zz:int(len(position))],'r.')
+            axt.get_yaxis().set_visible(False)
             if(len(load)>0):
                 axd=axt.twinx()
                 axd.plot(position[zz:int(len(position))],load[zz:int(len(position))],'b.')
+            axd.set_title(stepnames[n]+" "+expdates[m].replace('_',' '))
+            plt.tight_layout()
             plt.savefig(os.path.join(j,"LoadvsDisp.png"),dpi=128)
             plt.close()
             maxT=max(tempTip)
@@ -326,18 +393,39 @@ for i in file_list:
             #plt.plot(tautr,'.')
             #plt.plot(tautd,'.')
             #plt.show()
+### FD Analysis Oliveer-Pharr
+            try:
+                zz=gradien(position,-50, 0.002)
+                print("start is"+str(zz))
+                aa=indexFinder(load,2,0,zz)
+                print(aa)
+                fdpars,fdcovs=curve_fit(oliver,position[zz:aa],load[zz:aa],maxfev=100000,p0=[1.1,1.1,1.1])
+                print(*fdpars)
+                fdfit=oliver(np.array(position[zz:aa+1]),*fdpars)
+                print(fdfit)
+                print(position)
+                plt.figure()
+                plt.plot(position[zz:aa],fdfit[zz:aa],color='b',label="stop: "+str(aa)+"stop: "+str(zz))#str(fdpars[0])+"(h-"+str(fdpars[1])+")**"+str(fdpars[2]))#'%s(h-%s)**%s'%str(fdpars[0])%str(fdpars[1])%str(fdpars[2]))
+                plt.plot(position[zz:aa],load[zz:aa],color='orange')
+                plt.legend()
+                plt.savefig(os.path.join(j,"Oliver-Pharr.png"),dpi=128)
+                plt.close()
+            except:
+                print("error on FD")
+#            plt.plot(position[zz:int(len(position))],load[zz:int(len(position))])
+## Finish of FD analysis
             results_files[n]=j+"/ForceDisplacement.txt"
-            with open (results_files[n],"w+",encoding="utf-8") as dr:
+            with open (results_files[n],"w",encoding="utf-8") as dr:
                 dr.write(expdates[m]+" "+stepnames[n]+"\n"+"Time (s)\tDisplacement ("+ mikron+ ")\tLoad (mN)\tTip Temperature ("+degcel+")\n" )
                 for p in range(len(position)):
                     dr.write(str(redtim[p])+"\t"+str(position[p])+"\t"+str(load[p])+"\t"+str(reduceT[p])+"\n")
             dr.close()
-            with open(j+"/RisingTCs.txt","w+",encoding='utf-8') as q:
+            with open(j+"/RisingTCs.txt","w",encoding='utf-8') as q:
                 q.write(expdates[m]+" "+stepnames[n]+"\n"+"Time (s)\t\tDepth (um)\t\tLoad (mN)\t\tTime Constant (ms)\n")
                 for t in range (len(tautr)):
                     q.write(str(tautr[t])+"\n")
             q.close()
-            with open(j+"/DecayingTCs.txt","w+",encoding='utf-8') as q:
+            with open(j+"/DecayingTCs.txt","w",encoding='utf-8') as q:
                 q.write(expdates[m]+" "+stepnames[n]+"\n"+"Time (s)\t\tDepth (um)\t\tLoad (mN)\t\tTime Constant (ms)\n")
                 for t in range (len(tautd)):
                     q.write(str(tautd[t])+"\n")
@@ -514,7 +602,7 @@ for i in file_list:
             taulad.append(taud)
             
             ## writing each cycle's TC to txt file
-            with open(j+"/CyclesTCs.txt","w+") as q:
+            with open(j+"/CyclesTCs.txt","w") as q:
                 q.write(expdates[m]+" "+stepnames[n]+"\n"+"Rise TC (ms)\t\t\t Decay TC (ms)\n")
                 for t in range (len(taur)):
                     if(t<len(taud)):
@@ -923,6 +1011,16 @@ for i in file_list:
  #   com1.sharey(axd[0])
  #   com1.grid('True',axis='y',color='blue')
  #   common.grid('True',axis='y',color='red')
+    ##21.01.2022-single graph addition:
+    singleTemp=[]
+    singleDis=[]
+    singleTim=[]
+    singleLoad=[]
+    multiTim=[]
+    multiTemp=[]
+    multiDis=[]
+    multiLoad=[]
+    tim0=0
     p=0
     for t in stepnames:
         if('Indentation' in t or 'Approach' in t or 'Retract' in t):
@@ -934,13 +1032,29 @@ for i in file_list:
                 tLoad=[]
                 tTip=[]
             zz=0
+            multiTim.append([])
+            multiDis.append([])
+            multiTemp.append([])
+            multiLoad.append([])
             with open(results_files[n], 'r',encoding='utf-8') as res:
                 rows=res.readlines()[2:]
                 for x in rows:
+                    singleTim.append(float(x.split()[0])+tim0)
+                    multiTim[p].append(float(x.split()[0]))
                     tDis.append(float(x.split()[1]))
+                    singleDis.append(float(x.split()[1]))
+                    multiDis[p].append(float(x.split()[1]))
                     tLoad.append(float(x.split()[2]))
+                    singleLoad.append(float(x.split()[2]))
+                    multiLoad[p].append(float(x.split()[2]))
                     tTip.append(float(x.split()[3]))
+                    singleTemp.append(float(x.split()[3]))
+                    multiTemp[p].append(float(x.split()[3]))
             res.close()
+            try:
+                tim0=singleTim[-1]
+            except:
+                print("No TIME")
             if('Approach' in t):
                 zz=0
             else:
@@ -956,8 +1070,43 @@ for i in file_list:
                 p+=1
         n+=1
     if(inden==1):
-        figs.tight_layout()
-        fig.subplots_adjust(top=(0.88-0.1*(p/9)))
-        plt.savefig(os.path.join(i,"LoadvsDisp.png"),dpi=256)
+        if(p>1):
+            figs.tight_layout()
+            figs.subplots_adjust(top=(0.88-0.1*(p/9)))
+            plt.savefig(os.path.join(i,"LoadvsDisp.png"),dpi=256)
+            plt.figure()
+            singleDis=np.array(singleDis)
+            singleTemp=np.array(singleTemp)
+            plt.scatter(singleDis,singleTemp)
+            plt.savefig(os.path.join(i,"TemperatureAll_Depth.png"),dpi=256)
+            plt.figure()
+            singleTim=np.array(singleTim)
+            plt.scatter(singleTim,singleTemp)
+            plt.savefig(os.path.join(i,"TemperatureAll_Time.png"),dpi=256)
+            fig,ax=plt.subplots()
+            ax1=ax.twinx()
+            ax.scatter(singleTim,singleDis,label="Displacement",color="orange")
+            ax1.scatter(singleTim,singleLoad,label="Load",color="cyan")
+            ax1.yaxis.set_label("Load (mN)")
+            ax.yaxis.set_label("Displacement (%sm)"%mikron)
+            ax1.axes.yaxis.set_label("Load (mN)")
+            ax.axes.yaxis.set_label("Displacement (%sm)"%mikron)
+            fig.legend()
+            plt.savefig(os.path.join(i,"DispAll.png"),dpi=256)
+            plt.figure()
+            plt.scatter(singleDis,singleLoad)
+            plt.savefig(os.path.join(i,"LoadDisp-Single.png"),dpi=256)
+            plt.figure()
+            for inc in range(p):
+                plt.scatter(multiTim[inc],medfilt(multiTemp[inc],101))
+            plt.savefig(os.path.join(i,"TemperatureAll_Mtime.png"),dpi=256)
+            plt.figure()
+            for inc in range(p):
+                plt.scatter(multiTim[inc],medfilt(multiLoad[inc],101))
+            plt.savefig(os.path.join(i,"TemperatureAll_Mload.png"),dpi=256)
+            plt.figure()
+            for inc in range(p):
+                plt.scatter(multiTim[inc],medfilt(multiDis[inc],101))
+            plt.savefig(os.path.join(i,"TemperatureAll_Mdis.png"),dpi=256)                                        
         plt.close()
     m+=1
