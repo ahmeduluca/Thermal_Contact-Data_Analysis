@@ -13,6 +13,7 @@ import os
 import importlib
 from scipy.signal import medfilt
 import math
+from scipy.special import gamma
 
 """
 This code is for reading experimental data of Indenter/RC Thermal setup obtained by
@@ -26,13 +27,13 @@ mikron=u"\N{GREEK SMALL LETTER MU}"+"m"
 ###
 
 ## Main file of Expriment Data of text files -that converted from NI TDMS-
-main=r"D:\SEDA\09-02-2022\process1" #WindowsFilePath
+main=r"D:\SEDA\16-02-2022\process_osc" #WindowsFilePath
 #main="/Volumes/AhmedUluca/Indenter_Data/FusedProcess"
  #MacFilePath
 ###
 
-tip_chname="Temperature2"
-sample_chname='Temperature3'
+tip_chname="Temperature6"
+sample_chname='Temperature2'
 gage_chname="Voltage0"
 pos_chname="Actuator_Voltage"
 
@@ -42,9 +43,11 @@ grave=1#9.81
 bit_to_load=lc_mass_cal*grave
 loadcell_stiffness=536.5 ##mN/um
 gage2um=10 ##um/V
-load_threshold=10 ##mN loadcell sensitivity for touch
+load_threshold=2.5 ##mN loadcell sensitivity for touch
 terr=1.1#error for temperature
-disp_tresh=0.5
+disp_tresh=.5
+gradSayı=1000
+gradStep=0.007
 
 ###
 exp_per=4000 ##millisec
@@ -83,17 +86,25 @@ def oliver(h,A,f,m):
 
 def gradien(arr,inter,thresh):
     counter=0
+    sayac=0
     for i in range(0,len(arr)):
         if(arr[i]+thresh<arr[i+1]):
             if(counter>=0):
                 counter+=1
             else:
-                counter=0
+                sayac+=1
+                if(sayac>3):
+                    counter=0
+                    sayac=0
+                    
         elif(arr[i]-thresh>arr[i+1]):
             if(counter<=0):
                 counter-=1
             else:
-                counter=0
+                sayac+=1
+                if(sayac>3):
+                    counter=0
+                    sayac=0
         if(counter>inter and inter>0):
             return i-inter+1
             break
@@ -126,7 +137,7 @@ def indexFinder(arr,condition,value,start=0,stop=0):
 
 
 
-def area_func(d,R_0=0.7,alpha=1.22):
+def area_projected(d,R_0=0.7,alpha=1.16):
     return np.pi*(R_0**2+2*R_0*np.tan(alpha)*d+np.tan(alpha)**2*d**2)
 
     
@@ -137,6 +148,15 @@ def oliverPharr(h,a,c,h_0,m):
 def stiffness(h,a,c,h_0,m):
     return m*a*(h-h_0)**(m-1)
 
+def martens(h,a):
+    return a*h**2#a=1/(ms^2)
+
+
+def area_surface(h,R0,h0=0.13*10**-6,alpha=1.16):
+    return np.pi*((h+h0)**2*np.tan(alpha)-R0*h0)/np.cos(alpha)+np.pi*R0**2
+
+def epsilon(m):
+    return (1-(gamma(m/(2*m-2))/(gamma((2*m-1)/(2*m-2))))*(1/math.sqrt(np.pi)))*m
 ###
 
 
@@ -264,7 +284,7 @@ for i in file_list:
                 a=0
                 for kuvvet in load:
                     a+=1
-                    if(kuvvet>load_threshold):
+                    if(kuvvet>load_threshold+min(load)):
                         break
                 oran=1-(len(load)-a)/len(load)
                 b=int(oran*len(volt))-1
@@ -290,13 +310,14 @@ for i in file_list:
             zz=0
 
             #######   Interpolation ###################################################################
-            kernel=int(len(load)/50)
+            kernel=int(len(load)/100)
             if(kernel%2==0):
                 kernel+=1
             load=medfilt(load,kernel)
             min_load_t=min(load_time)
             for i3 in range(len(load_time)):
                 load_time[i3]=load_time[i3]-min_load_t
+            extdata=(time[-1]-load_time[-1])*daq_frq
             interpol=interp.interp1d(load_time,load,fill_value="extrapolate")
             load=interpol(time)
             #########################
@@ -401,8 +422,13 @@ for i in file_list:
                 F1=np.array(load)
                 disp1=np.array(volt)
                 f0=min(load)+load_threshold
-                inop=np.where(F1<min(F1)+f0)[0]#index oliver pharr
-                h_0=disp1[inop][0]
+                inop=np.where(F1<min(F1)+load_threshold)[0]#index oliver pharr
+                if(len(inop)>0):
+                    h_0=disp1[inop][0]
+                else:
+                    h_0=0
+                    disp_tresh=(max(volt)-min(volt))/2
+                    print('h_0 cannot be found h_0=0')
                 fmin=min(load)
                 for k in range(len(volt)):
                     if (np.isfinite(volt[k])!=True):
@@ -410,33 +436,89 @@ for i in file_list:
                     load[k]=load[k]-fmin
                 ##disp=np.flipud(disp)
                 ##F=np.flipud(F)
-                p0=[1,1,h_0,1.5]
+                loaderr=2.5
+                p0=[1,1,round(h_0,3),1.5]
                 bounds=([0.,-100,h_0-disp_tresh,1],[1000,100,h_0+disp_tresh,2])
-                indexxx=gradien(load,100,0.02)
-                indexx=len(load)-gradien(np.flipud(load),-1000,0.002)
-                if(indexxx==-1):
-                    indexxx=gradien(load,-100,0.02)
-                    indexx=len(load)-gradien(np.flipud(load),1000,0.002)
-                para,cov=curve_fit(oliverPharr,volt[indexxx:indexx],load[indexxx:indexx],bounds=bounds,p0=p0,check_finite=False,maxfev = 1000000)
+                indexxx=gradien(load,gradSayı,gradStep)
+                indexx=len(load)-gradien(np.flipud(load),-gradSayı,gradStep)
+                if(indexxx==-1):#geri çekme
+                    indexxx=gradien(load,-gradSayı,gradStep)
+                    indexx=len(load)-gradien(np.flipud(load),gradSayı,gradStep)
+                para,cov=curve_fit(oliverPharr,volt[indexxx:indexx],load[indexxx:indexx],bounds=bounds,p0=p0,check_finite=False,maxfev = 1000000,sigma=loaderr*np.ones(len(load[indexxx:indexx])),absolute_sigma=True)
             except:
                 print("error on FD")
-                para,cov=curve_fit(oliverPharr,volt[indexxx:indexx],load[indexxx:indexx],check_finite=False,maxfev = 1000000)
+                indexxx=gradien(load,gradSayı,gradStep)
+                indexx=len(load)-gradien(np.flipud(load),-gradSayı,gradStep)
+                if(indexxx==-1 or indexxx==indexx or indexxx>indexx):
+                    indexxx=gradien(load,-gradSayı,gradStep)
+                    indexx=len(load)-gradien(np.flipud(load),gradSayı,gradStep)
+                    if(indexxx==-1 or indexxx==len(load)-1):
+                        indexxx=0
+                        indexx=len(load)-gradien(np.flipud(load),gradSayı,gradStep)
+                    
+                para,cov=curve_fit(oliverPharr,volt[indexxx:indexx],load[indexxx:indexx],check_finite=False,maxfev = 1000000,sigma=loaderr*np.ones(len(load[indexxx:indexx])),absolute_sigma=True)
+            #imax=np.where(load<max(load))[0][0]
             hmax=max(volt)
+            Fmax=oliverPharr(hmax,*para)
             S=stiffness(hmax,*para)*10**3#contact volt
-            E=math.sqrt(np.pi)*S/(2*math.sqrt(area_func(hmax)))#reduced young modulus
-            hr=volt[np.where(stiffness(volt,*para)==0)[0]]
+            c=Fmax-S*hmax/1000
+            hr=-c*1000/S
+            print('hr=',hr)
+            E=math.sqrt(np.pi)*S/(2*math.sqrt(area_projected(hmax)))#reduced young modulus
+            eps=epsilon(para[3])
+            hc=hmax-eps*(hmax-hr)
+            H_ıt=Fmax/area_projected(hc)#GPa
             print('S=',S,'N/m','E=',E,'MPa')
+    ############ Uncertanity calculation for S 
+            da_=cov[0][0]
+            dh0_=cov[2][2]
+            dm_=cov[3][3]
+            dh_=0.05**2
+            a_=para[0]
+            h_0=para[2]
+            m_=para[3]
+            der1=(m_*(hmax-h_0)**(m_-1))**2
+            der2=(-a_*m_*(m_-1)*(hmax-h_0)**(m_-2))**2
+            der3=(a_*(hmax-h_0)**(m_-1)+(a_*m_*(hmax-h_0)**(m_-1)))**2
+            der4=(a_*m_*(m_-1)*(hmax-h_0)**(m_-2))**2
+##            uncert_S=math.sqrt(der1*da_+der2*dh0_+der3*dm_+der4*dh_)*10**3#in N/m
+##            print('DeltaS=',uncert_S,'N/m')
+    ####### End of uncertanity calculation
             plt.figure()
-            labell='%s*(h-%s)**%s+%s'%(str(round(para[0],3)),str(round(para[2],3)),str(round(para[3],3)),str(round(para[1],3)))
-            plt.plot(volt,load,label='ahmed')
+            labell='$%s(h-(%s))^{%s}+(%s)$'%(str(round(para[0],3)),str(round(para[2],3)),str(round(para[3],3)),str(round(para[1],3)))
+            plt.plot(volt,load,label=r'$\varepsilon(m)$=%s'%eps)
             plt.plot(volt,oliverPharr(volt,*para),label=labell)
-            plt.plot(volt,stiffness(volt,*para),label='Stiffness=%s,$E_r$=%s,$h_r$=%s'%(str(np.round(S,3)),str(np.round(E,3)),str(np.round(hr,3))))
+            #plt.plot(volt[indexxx:indexx],stiffness(volt[indexxx:indexx],*para),label='Stiffness=%s,$E_r$=%s,$h_r$=%s'%(str(np.round(S,3)),str(np.round(E,3)),str(np.round(hr,3))))
+            plt.plot([hr,hmax],[0,Fmax],label='$h_r=$%.2f,S=%.2f,$h_c$=%.2f,$H_{IT}$=%.2f'%(hr,S,hc,H_ıt))
+            #plt.ylim(0,max(load)*1.5)
             plt.legend()
             plt.xlabel('Displacement(%s)'%mikron)
             plt.ylabel('Load (mN)')
             plt.savefig(os.path.join(j,"Oliver-Pharr.png"),dpi=128)
             plt.close()
+            print(j)
+            
+######################
+############ Martens
+##            if(load[0]<load[-1]):
+##                i90=np.where(load>max(load)*0.9)[0][0]
+##                i50=np.where(load>max(load)*0.5)[0][0]
+##                F2=[]
+####                for k5 in range(len(load)):
+####                    up=max(load)*0.9
+####                    down=max(load)*0.5
+####                    if(load[k5]<up and load[k5]>down):
+####                        F2.append(load[k5])
+####                F2=np.array()
+##                paraM,covM=curve_fit(martens,volt[i50:i90],load[i50:i90],check_finite=False,maxfev=100000)
+##                plt.plot(volt[i50:i90],load[i50:i90],volt[i50:i90],martens(volt[i50:i90],*paraM))
+##                print(j)
+##                print(i50,i90,paraM[0])
+##                plt.savefig(os.path.join(j,"Martens.png"),dpi=128)
+##                plt.close()
+##
 
+            
                 
 #            plt.plot(position[zz:int(len(position))],load[zz:int(len(position))])
 ## Finish of FD analysis

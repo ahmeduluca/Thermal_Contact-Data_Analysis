@@ -7,16 +7,16 @@ import shutil
 ## of exp_log &load &position files & txt converted TDMS group data
 
 ### Give the file path to search experiment tdms&txt results:
-tdms_file_list=glob.glob("/Volumes/AhmedUluca/Indenter_Data/FusedSilicaNov/**/**/*.tdms") #MacFilePath
-txt_file_list=glob.glob("//Volumes/AhmedUluca/Indenter_Data/FusedSilicaNov/**/**/*.txt")
-process_dir="/Volumes/AhmedUluca/Indenter_Data/FusedProcess"
+#tdms_file_list=glob.glob("/Volumes/AhmedUluca/Indenter_Data/FusedSilicaNov/**/**/*.tdms") #MacFilePath
+#txt_file_list=glob.glob("//Volumes/AhmedUluca/Indenter_Data/FusedSilicaNov/**/**/*.txt")
+#process_dir="/Volumes/AhmedUluca/Indenter_Data/FusedProcess"
 cur_dir_txts=[]
 ### Windows File Path
-##tdms_file_list=glob.glob("D:/ahmed/RC experiments/Cu/Foil/**/**/*.tdms")
-##txt_file_list=glob.glob("D:/ahmed/RC experiments/Cu/Foil/**/**/*.txt")
+tdms_file_list=glob.glob(r"D:\SEDA\16-02-2022\**\*.tdms")
+txt_file_list=glob.glob("D:/SEDA/16-02-2022/**/*.txt")
 ##
 ### Give the new processed file directory path
-##process_dir="D:/ahmed/RC experiments/Cu/Cu-Process/Foil"
+process_dir="D:/SEDA/16-02-2022/process"
 ##
 # Walk through found TDMS files:
 for i in tdms_file_list:
@@ -86,7 +86,7 @@ for i in tdms_file_list:
                 
             ## Copy corresponding data found as txt to step directory :
             for k in cur_dir_txts:
-                if(gu in k):
+                if(gu == (k.split('_')[1]).split('\\')[1]):
                     
 ##! By directly copying txts, naming for these files left with step name on them with '_'
 ## separators.. Later it may be standardized for just name of measurement like "Load" etc.
