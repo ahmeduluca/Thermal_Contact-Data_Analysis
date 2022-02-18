@@ -12,11 +12,11 @@ import shutil
 #process_dir="/Volumes/AhmedUluca/Indenter_Data/FusedProcess"
 cur_dir_txts=[]
 ### Windows File Path
-tdms_file_list=glob.glob(r"D:\SEDA\16-02-2022\**\*.tdms")
-txt_file_list=glob.glob("D:/SEDA/16-02-2022/**/*.txt")
+tdms_file_list=glob.glob(r"D:\SEDA\18-02-2022\**\*.tdms")
+txt_file_list=glob.glob("D:/SEDA/18-02-2022/**/*.txt")
 ##
 ### Give the new processed file directory path
-process_dir="D:/SEDA/16-02-2022/process"
+process_dir="D:/SEDA/18-02-2022/process"
 ##
 # Walk through found TDMS files:
 for i in tdms_file_list:

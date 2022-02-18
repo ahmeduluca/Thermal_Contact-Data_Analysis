@@ -14,6 +14,7 @@ import importlib
 from scipy.signal import medfilt
 import math
 from scipy.special import gamma
+from natsort import natsorted
 
 """
 This code is for reading experimental data of Indenter/RC Thermal setup obtained by
@@ -27,7 +28,7 @@ mikron=u"\N{GREEK SMALL LETTER MU}"+"m"
 ###
 
 ## Main file of Expriment Data of text files -that converted from NI TDMS-
-main=r"D:\SEDA\16-02-2022\process_osc" #WindowsFilePath
+main=r"D:\SEDA\18-02-2022\process3" #WindowsFilePath
 #main="/Volumes/AhmedUluca/Indenter_Data/FusedProcess"
  #MacFilePath
 ###
@@ -195,9 +196,9 @@ for i in file_list:
     print(file_list[m])
     print(expdates[m])
     sub_dirs=[f.path for f in os.scandir(i) if f.is_dir()]
-    sub_dirs.sort()
+    sub_dirs=natsorted(sub_dirs)
     stepnames=[f.name for f in os.scandir(i) if f.is_dir()]
-    stepnames.sort()
+    stepnames=natsorted(stepnames)
     results_files=['']*len(stepnames)   
     n=0
     taular=[]
