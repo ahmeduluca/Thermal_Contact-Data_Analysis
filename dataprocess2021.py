@@ -28,25 +28,29 @@ mikron=u"\N{GREEK SMALL LETTER MU}"+"m"
 ###
 
 ## Main file of Expriment Data of text files -that converted from NI TDMS-
-main=r"D:\SEDA\18-02-2022\process3" #WindowsFilePath
-#main="/Volumes/AhmedUluca/Indenter_Data/FusedProcess"
+#main=r"D:\SEDA\18-02-2022\process3" #WindowsFilePath
+main="/Volumes/AhmedUluca/Indenter_Data/main/Berkovich/Au/Indent Sweep Different Locations"
  #MacFilePath
 ###
 
-tip_chname="Temperature6"
-sample_chname='Temperature2'
+tip_chname="Temperature9"
+sample_chname='Temperature12'
 gage_chname="Voltage0"
 pos_chname="Actuator_Voltage"
 
 ## Calibration constants of Experiment ##
-lc_mass_cal= 1000#4.75
-grave=1#9.81
+lc_mass_cal= 4.75 #1000
+grave= 9.81 #1
 bit_to_load=lc_mass_cal*grave
+if("Cu" in main):
+    tip_chname="Temperature2"
+    sample_chname='Temperature3'
 loadcell_stiffness=536.5 ##mN/um
 gage2um=10 ##um/V
 load_threshold=2.5 ##mN loadcell sensitivity for touch
-terr=1.1#error for temperature
+terr=0.08#error for temperature
 disp_tresh=.5
+sg_tol=0.2
 gradSayı=1000
 gradStep=0.007
 
@@ -190,7 +194,7 @@ voltaj=[]
 temp=[[],[]]
 time=[]
 min_vol=0
-sg_tol=0.25
+loadcount=0
 ## Search for Experiment Files that include Step Files ##
 for i in file_list:
     print(file_list[m])
@@ -223,16 +227,26 @@ for i in file_list:
             if("Load" in k):
                 load=[]
                 load_time=[]
+                loadcount=0
                 f=open(k,"r",encoding='ascii')
                 spl=0
                 if(len(f.readline().split())>1):
                    spl=1
                 for x in f:
                     load.append(float(x.split()[spl])*bit_to_load/1000)
-                    load_time.append(float(x.split()[0])/1000)
+                    if(spl==1):
+                        load_time.append(float(x.split()[0])/1000)
+                    else:
+                        load_time.append(loadcount*400/1000)
+                        loadcount+=1
                 f.close()
-                print(len(load_time)/len(load))
-##            elif(pos_chname in k):
+                if(len(load)>1):
+                    print(len(load_time)/len(load))
+                else:
+                    print("NoLoad")
+                    load.append(1.)
+                    load_time.append(1.)
+                    ##            elif(pos_chname in k):
 ##                f=open(k,"r")
 ##                for x in f:
 ##                    position[n].append(float(x))
@@ -267,6 +281,11 @@ for i in file_list:
             load.append(0)
         if(len(time)<1):
             time.append(0)
+        else:
+            loadStPt=time[-1]-len(load)*0.05
+            print(loadStPt)
+#            if(spl!=1):
+#                load_time=np.linspace(loadStPt,time[-1],len(load))
         if(len(tempTip)<1):
             tempTip=np.zeros(len(time))
         if(len(tempSample)<1):
@@ -279,55 +298,42 @@ for i in file_list:
 ##Indentation load displacement graphs & timeconstant extraction trial through indentation stage
         if('Indentation' in stepnames[n] or 'Calibration' in stepnames[n] or 'Approach' in stepnames[n] or 'Retract' in stepnames[n]):
             if(len(voltaj)>101):
-                volt=medfilt(volt,3)
-            if(len(load)>0):
-                #load=medfilt(load,31)
-                a=0
-                for kuvvet in load:
-                    a+=1
-                    if(kuvvet>load_threshold+min(load)):
-                        break
-                oran=1-(len(load)-a)/len(load)
-                b=int(oran*len(volt))-1
-                orta=int(len(volt)/len(load))
-                if (orta==0):
-                    orta=1
-            else:
-                b=0
-                orta=1
-            tempTip=medfilt(tempTip,21)
-            if(n==0 or (n>0 and 'Retract' in stepnames[n-1]) or 'Approach' in stepnames[n]):
-                min_vol=volt[b]
+                volt=medfilt(volt,13)
             zz=0
-            if("Approach" in stepnames[n]):
-                mxpos=max(volt)
-                mnpos=min(volt)
-                dpoz=mxpos-mnpos
-                if(volt[b]>mnpos):
-                    for t in range(len(volt)-1,-1,-1):
-                        if(volt[t]-sg_tol<mnpos):
-                            zz=t
-                            break
-            zz=0
-
             #######   Interpolation ###################################################################
-            kernel=int(len(load)/100)
-            if(kernel%2==0):
-                kernel+=1
-            load=medfilt(load,kernel)
-            min_load_t=min(load_time)
-            for i3 in range(len(load_time)):
-                load_time[i3]=load_time[i3]-min_load_t
-            extdata=(time[-1]-load_time[-1])*daq_frq
-            interpol=interp.interp1d(load_time,load,fill_value="extrapolate")
-            load=interpol(time)
+
+            if(len(load)>1):               
+                kernel=int(len(load)/100)
+                if(kernel%2==0):
+                    kernel+=1
+                load=medfilt(load,kernel)
+                min_load_t=min(load_time)
+                for i3 in range(len(load_time)):
+                    load_time[i3]=load_time[i3]-min_load_t
+                extdata=(time[-1]-load_time[-1])*daq_frq
+                interpol=interp.interp1d(load_time,load,fill_value="extrapolate")
+                load=interpol(time)
             #########################
-            
-            for t in range(len(volt)):
+                ### OFFSET ###
+            try:
+                #load=medfilt(load,31)
+                a=np.where(load>min(load)+load_threshold)[0][0]
+            except:
+                if('Approach' in stepnames[n]):
+                    a=len(volt)-1
+                else:
+                    a=np.where(volt==min(volt))[0][0]
+            if((n==0) or (n>0 and ('Indent' in stepnames[n]) and ('Approach' in stepnames[n-1]))):
+                min_vol=min(volt)
+            for t in range(len(volt)):###Touch point offset substraction
                 volt[t]=volt[t]-min_vol
+
+        ##################
+                
+            tempTip=medfilt(tempTip,21)
             figs,axd=plt.subplots()
             axd.set_title(stepnames[n]+" "+expdates[m].replace('_',' '))
-            if(len(load)>0):
+            if(len(load)>1):
                 axl=axd.twinx()
                 axl.plot(time,load,'.',color='cyan')
                 axl.set_ylabel("Load (mN)",color="cyan")
@@ -343,14 +349,11 @@ for i in file_list:
             axt.plot(time,tempTip,'r.')#
             figs.tight_layout()
             plt.savefig(os.path.join(j,"TimevsLoad&Disp.png"),dpi=128)
-            plt.close()
-            
-
-                            
+            plt.close()                            
             figs,axt=plt.subplots()
             #axt.plot(position[zz:int(len(position))],reduceT[zz:int(len(position))],'r.')
             axt.get_yaxis().set_visible(False)
-            if(len(load)>0):
+            if(len(load)>1):
                 axd=axt.twinx()
                 axd.plot(volt[zz:int(len(volt))],load[zz:int(len(volt))],'b.')
             axd.set_title(stepnames[n]+" "+expdates[m].replace('_',' '))
@@ -364,12 +367,12 @@ for i in file_list:
             number=(maxT-minT)/dTemp
 ##            lastpt=np.where(tempTip<=minT)
 ##            lastpt=int(lastpt[0][-1])
-            lastpt=b
+            lastpt=a
             tim=[]
             say=0
             tautr=[]
             tautd=[]
-            starttime=time[b]
+            starttime=time[a]
             for t in range(lastpt,len(tempTip)):
                 if(tempTip[t]==maxT):
                     starttime=time[t]
@@ -417,87 +420,89 @@ for i in file_list:
             #plt.plot(tautd,'.')
             #plt.show()
 ### FD Analysis Oliver-Pharr
-            try:
-                #plt.rcParams['text.usetex']=True
-                load=medfilt(load,11)
-                F1=np.array(load)
-                disp1=np.array(volt)
-                f0=min(load)+load_threshold
-                inop=np.where(F1<min(F1)+load_threshold)[0]#index oliver pharr
-                if(len(inop)>0):
-                    h_0=disp1[inop][0]
-                else:
-                    h_0=0
-                    disp_tresh=(max(volt)-min(volt))/2
-                    print('h_0 cannot be found h_0=0')
-                fmin=min(load)
-                for k in range(len(volt)):
-                    if (np.isfinite(volt[k])!=True):
-                        print(volt[k],k)
-                    load[k]=load[k]-fmin
-                ##disp=np.flipud(disp)
-                ##F=np.flipud(F)
-                loaderr=2.5
-                p0=[1,1,round(h_0,3),1.5]
-                bounds=([0.,-100,h_0-disp_tresh,1],[1000,100,h_0+disp_tresh,2])
-                indexxx=gradien(load,gradSayı,gradStep)
-                indexx=len(load)-gradien(np.flipud(load),-gradSayı,gradStep)
-                if(indexxx==-1):#geri çekme
-                    indexxx=gradien(load,-gradSayı,gradStep)
-                    indexx=len(load)-gradien(np.flipud(load),gradSayı,gradStep)
-                para,cov=curve_fit(oliverPharr,volt[indexxx:indexx],load[indexxx:indexx],bounds=bounds,p0=p0,check_finite=False,maxfev = 1000000,sigma=loaderr*np.ones(len(load[indexxx:indexx])),absolute_sigma=True)
-            except:
-                print("error on FD")
-                indexxx=gradien(load,gradSayı,gradStep)
-                indexx=len(load)-gradien(np.flipud(load),-gradSayı,gradStep)
-                if(indexxx==-1 or indexxx==indexx or indexxx>indexx):
-                    indexxx=gradien(load,-gradSayı,gradStep)
-                    indexx=len(load)-gradien(np.flipud(load),gradSayı,gradStep)
-                    if(indexxx==-1 or indexxx==len(load)-1):
-                        indexxx=0
+            if(len(load)>1):
+                try:
+                    #plt.rcParams['text.usetex']=True
+                    load=medfilt(load,11)
+                    F1=np.array(load)
+                    disp1=np.array(volt)
+                    f0=min(load)+load_threshold
+                    inop=np.where(F1<min(F1)+load_threshold)[0]#index oliver pharr
+                    if(len(inop)>0):
+                        h_0=disp1[inop][0]
+                    else:
+                        h_0=0
+                        disp_tresh=(max(volt)-min(volt))/2
+                        print('h_0 cannot be found h_0=0')
+                    fmin=min(load)
+                    for k in range(len(volt)):
+                        if (np.isfinite(volt[k])!=True):
+                            print(volt[k],k)
+                        load[k]=load[k]-fmin
+                    ##disp=np.flipud(disp)
+                    ##F=np.flipud(F)
+                    loaderr=2.5
+                    p0=[1,1,round(h_0,3),1.5]
+                    bounds=([0.,-100,h_0-disp_tresh,1],[1000,100,h_0+disp_tresh,2])
+                    indexxx=gradien(load,gradSayı,gradStep)
+                    indexx=len(load)-gradien(np.flipud(load),-gradSayı,gradStep)
+                    if(indexxx==-1):#geri çekme
+                        indexxx=gradien(load,-gradSayı,gradStep)
                         indexx=len(load)-gradien(np.flipud(load),gradSayı,gradStep)
-                    
-                para,cov=curve_fit(oliverPharr,volt[indexxx:indexx],load[indexxx:indexx],check_finite=False,maxfev = 1000000,sigma=loaderr*np.ones(len(load[indexxx:indexx])),absolute_sigma=True)
-            #imax=np.where(load<max(load))[0][0]
-            hmax=max(volt)
-            Fmax=oliverPharr(hmax,*para)
-            S=stiffness(hmax,*para)*10**3#contact volt
-            c=Fmax-S*hmax/1000
-            hr=-c*1000/S
-            print('hr=',hr)
-            E=math.sqrt(np.pi)*S/(2*math.sqrt(area_projected(hmax)))#reduced young modulus
-            eps=epsilon(para[3])
-            hc=hmax-eps*(hmax-hr)
-            H_ıt=Fmax/area_projected(hc)#GPa
-            print('S=',S,'N/m','E=',E,'MPa')
-    ############ Uncertanity calculation for S 
-            da_=cov[0][0]
-            dh0_=cov[2][2]
-            dm_=cov[3][3]
-            dh_=0.05**2
-            a_=para[0]
-            h_0=para[2]
-            m_=para[3]
-            der1=(m_*(hmax-h_0)**(m_-1))**2
-            der2=(-a_*m_*(m_-1)*(hmax-h_0)**(m_-2))**2
-            der3=(a_*(hmax-h_0)**(m_-1)+(a_*m_*(hmax-h_0)**(m_-1)))**2
-            der4=(a_*m_*(m_-1)*(hmax-h_0)**(m_-2))**2
-##            uncert_S=math.sqrt(der1*da_+der2*dh0_+der3*dm_+der4*dh_)*10**3#in N/m
-##            print('DeltaS=',uncert_S,'N/m')
-    ####### End of uncertanity calculation
-            plt.figure()
-            labell='$%s(h-(%s))^{%s}+(%s)$'%(str(round(para[0],3)),str(round(para[2],3)),str(round(para[3],3)),str(round(para[1],3)))
-            plt.plot(volt,load,label=r'$\varepsilon(m)$=%s'%eps)
-            plt.plot(volt,oliverPharr(volt,*para),label=labell)
-            #plt.plot(volt[indexxx:indexx],stiffness(volt[indexxx:indexx],*para),label='Stiffness=%s,$E_r$=%s,$h_r$=%s'%(str(np.round(S,3)),str(np.round(E,3)),str(np.round(hr,3))))
-            plt.plot([hr,hmax],[0,Fmax],label='$h_r=$%.2f,S=%.2f,$h_c$=%.2f,$H_{IT}$=%.2f'%(hr,S,hc,H_ıt))
-            #plt.ylim(0,max(load)*1.5)
-            plt.legend()
-            plt.xlabel('Displacement(%s)'%mikron)
-            plt.ylabel('Load (mN)')
-            plt.savefig(os.path.join(j,"Oliver-Pharr.png"),dpi=128)
-            plt.close()
-            print(j)
+                    para,cov=curve_fit(oliverPharr,volt[indexxx:indexx],load[indexxx:indexx],bounds=bounds,p0=p0,check_finite=False,maxfev = 10000,sigma=loaderr*np.ones(len(load[indexxx:indexx])),absolute_sigma=True)
+                except:
+                    print("error on FD")
+                    indexxx=gradien(load,gradSayı,gradStep)
+                    indexx=len(load)-gradien(np.flipud(load),-gradSayı,gradStep)
+                    if(indexxx==-1 or  indexxx>=indexx):
+                        indexxx=gradien(load,-gradSayı,gradStep)
+ #                       indexx=len(load)-gradien(np.flipud(load),gradSayı,gradStep)
+                        if(indexxx==-1 or indexxx==len(load)-1):
+                            indexxx=0
+                            indexx=len(load)-gradien(np.flipud(load),gradSayı,gradStep)
+                    para=[1,1,1,1.1]
+                    cov=[[1,1,1,1],[1,1,1,1],[1,1,1,1],[1,1,1,1]]
+ #                   para,cov=curve_fit(oliverPharr,volt[indexxx:indexx],load[indexxx:indexx],check_finite=False,maxfev = 10000,sigma=loaderr*np.ones(len(load[indexxx:indexx])),absolute_sigma=True)
+                #imax=np.where(load<max(load))[0][0]
+                hmax=max(volt)
+                Fmax=oliverPharr(hmax,*para)
+                S=stiffness(hmax,*para)*10**3#contact volt
+                c=Fmax-S*hmax/1000
+                hr=-c*1000/S
+                print('hr=',hr)
+                E=math.sqrt(np.pi)*S/(2*math.sqrt(area_projected(hmax)))#reduced young modulus
+                eps=epsilon(para[3])
+                hc=hmax-eps*(hmax-hr)
+                H_ıt=Fmax/area_projected(hc)#GPa
+                print('S=',S,'N/m','E=',E,'MPa')
+        ############ Uncertanity calculation for S 
+                da_=cov[0][0]
+                dh0_=cov[2][2]
+                dm_=cov[3][3]
+                dh_=0.05**2
+                a_=para[0]
+                h_0=para[2]
+                m_=para[3]
+                der1=(m_*(hmax-h_0)**(m_-1))**2
+                der2=(-a_*m_*(m_-1)*(hmax-h_0)**(m_-2))**2
+                der3=(a_*(hmax-h_0)**(m_-1)+(a_*m_*(hmax-h_0)**(m_-1)))**2
+                der4=(a_*m_*(m_-1)*(hmax-h_0)**(m_-2))**2
+    ##            uncert_S=math.sqrt(der1*da_+der2*dh0_+der3*dm_+der4*dh_)*10**3#in N/m
+    ##            print('DeltaS=',uncert_S,'N/m')
+        ####### End of uncertanity calculation
+                plt.figure()
+                labell='$%s(h-(%s))^{%s}+(%s)$'%(str(round(para[0],3)),str(round(para[2],3)),str(round(para[3],3)),str(round(para[1],3)))
+                plt.plot(volt,load,label=r'$\varepsilon(m)$=%s'%eps)
+                plt.plot(volt,oliverPharr(volt,*para),label=labell)
+                #plt.plot(volt[indexxx:indexx],stiffness(volt[indexxx:indexx],*para),label='Stiffness=%s,$E_r$=%s,$h_r$=%s'%(str(np.round(S,3)),str(np.round(E,3)),str(np.round(hr,3))))
+                plt.plot([hr,hmax],[0,Fmax],label='$h_r=$%.2f,S=%.2f,$h_c$=%.2f,$H_{IT}$=%.2f'%(hr,S,hc,H_ıt))
+                #plt.ylim(0,max(load)*1.5)
+                plt.legend()
+                plt.xlabel('Displacement(%s)'%mikron)
+                plt.ylabel('Load (mN)')
+                plt.savefig(os.path.join(j,"Oliver-Pharr.png"),dpi=128)
+                plt.close()
+                print(j)
             
 ######################
 ############ Martens
@@ -526,7 +531,7 @@ for i in file_list:
             results_files[n]=j+"/ForceDisplacement.txt"
             with open (results_files[n],"w",encoding="utf-8") as dr:
                 dr.write(expdates[m]+" "+stepnames[n]+"\n"+"Time (s)\tDisplacement ("+ mikron+ ")\tLoad (mN)\tTip Temperature ("+degcel+")\n" )
-                for p in range(len(volt)):
+                for p in range(len(load)):
                     dr.write(str(time[p])+"\t"+str(volt[p])+"\t"+str(load[p])+"\t"+str(tempTip[p])+"\n")
             dr.close()
             with open(j+"/RisingTCs.txt","w",encoding='utf-8') as q:
@@ -540,8 +545,8 @@ for i in file_list:
                     q.write(str(tautd[t])+"\n")
             q.close()
             if('Retract' in stepnames[n]):
-                if(len(load)>11):
-                    load=medfilt(load,21)
+                if(len(load)>3):
+                    load=medfilt(load,3)
                     load_threshold+=load[-1]
 
                     
@@ -550,7 +555,7 @@ for i in file_list:
             ##Median filter of load to filter incident changes
             if(len(load)>300):
                 load=medfilt(load,31)
-            for t in range(len(volt)):
+            for t in range(len(volt)): ## Touch point offset subtraction
                 volt[t]=volt[t]-min_vol
             ###
             ## Find tolerances and averages of position and load to extract each cyle through data
@@ -786,11 +791,11 @@ for i in file_list:
                 upss=0
             if (math.isnan(downss)):
                 downss=0
-            for p in range(len(voltMean)):
-                if(p<lengvol):
-                    voltMean[p]=voltMean[p]-downss/loadcell_stiffness
-                else:
-                    voltMean[p]=voltMean[p]-upss/loadcell_stiffness
+##            for p in range(len(voltMean)):
+##                if(p<lengvol):
+##                    voltMean[p]=voltMean[p]-downss/loadcell_stiffness
+##                else:
+##                    voltMean[p]=voltMean[p]-upss/loadcell_stiffness
             ## Write Averages of Cycles of Temperatures and Strain results to txt file !
             results_files[n]=j+"/AverageResults.txt"
             with open (results_files[n],"w",encoding="utf-8") as dr:
@@ -840,7 +845,11 @@ for i in file_list:
     n=0
     p=0
     riseTcs=[]
+    riseTcsErr=[]
     decayTcs=[]
+    decayTcsErr=[]
+    tempMax=[]
+    tempMin=[]
     yerrR=[]
     yerrD=[]
     with open(i+"/AverTCs.txt","w") as q:
@@ -870,15 +879,19 @@ for i in file_list:
             ax1.plot(t3,tTip,'.',color='red',zorder=2)
         ##curve fit t1 & t2 exp rise
             try:
-                popt1, pcov1 =curve_fit(rise,fittime,aredrise,maxfev=100000,p0=[delta,500,amin],sigma=terr*np.ones(len(aredrise)),absolute_sigma=False)
+                popt1, pcov1 =curve_fit(rise,fittime,aredrise,maxfev=100000,p0=[delta,500,amin],sigma=terr*np.ones(len(aredrise)),absolute_sigma=True)
                 Risefit=rise(fittime, *popt1)
                 yr1 = rise(fittime, popt1[0], max(popt1[1] - pcov1[1,1]**0.5,10), popt1[2])
                 yr2 = rise(fittime, popt1[0], max(popt1[1] + pcov1[1,1]**0.5,10), popt1[2])
                 riseTcs.append(popt1[1])
+                riseTcsErr.append(pcov1[1,1]**0.5)
+                tempMax.append(max(aredrise))
                 yerrR.append(np.floor(pcov1[1,1]**0.5))
-                popt2, pcov2 =curve_fit(decay,fittime,areddecay,maxfev=100000,p0=[-delta,500,amin],sigma=terr*np.ones(len(areddecay)),absolute_sigma=False)
+                popt2, pcov2 =curve_fit(decay,fittime,areddecay,maxfev=100000,p0=[-delta,500,amin],sigma=terr*np.ones(len(areddecay)),absolute_sigma=True)
                 yerrD.append(np.floor(pcov2[1,1]**0.5))
                 decayTcs.append(popt2[1])
+                decayTcsErr.append(pcov2[1,1]**0.5)
+                tempMin.append(min(areddecay))
                 Decayfit=decay(fittime, *popt2)
                 yd1 = decay(fittime, popt2[0], max(popt2[1] - pcov2[1,1]**0.5,10), popt2[2])
                 yd2 = decay(fittime, popt2[0], max(popt2[1] + pcov2[1,1]**0.5,10), popt2[2])
@@ -987,7 +1000,7 @@ for i in file_list:
         inDec.axes.xaxis.set_visible(False)
         inset2.axes.yaxis.set_visible(False)
         deptErr=np.ones(len(riseTcs))*sg_tol
-        loadErr=np.ones(len(riseTcs))*loadtol
+        loadErr=np.ones(len(riseTcs))*load_threshold
         l1=inset.errorbar(depthLoad,riseTcs, yerr=yerrR, xerr=deptErr, label="Rise TC vs Depth",color='red',ls=':',marker='o',capsize=5, capthick=2)
         l2=inDec.errorbar(depthUnlod,decayTcs, yerr=yerrD, xerr=deptErr, label="Decay TC vs Depth",color='orange',ls=' ',marker='o',capsize=5, capthick=2)
         l3=inset2.errorbar(loadup,riseTcs, yerr=yerrR, xerr=loadErr, label="Rise TC vs Load",color='blue',ls=':',marker='o',capsize=5, capthick=2)
@@ -1011,15 +1024,15 @@ for i in file_list:
     ###
         ## Writing rise tau vs depth & load to file
         with open(i+"/riseTC_disp_load.txt","w",encoding="utf-8") as q:
-            q.write("Time Constant (ms)\tDepth ("+mikron+")\tLoad (mN)\n")
+            q.write("Time Constant (ms)\tSigma (ms)\t Temperature ("+degcel+")\tDepth ("+mikron+")\tLoad (mN)\n")
             for t in range(len(riseTcs)):
-                q.write(str(riseTcs[t])+"\t"+str(depthLoad[t])+"\t"+str(loadup[t])+"\n")
+                q.write(str(riseTcs[t])+"\t"+str(riseTcsErr[t])+"\t"+str(tempMax[t])+"\t"+str(depthLoad[t])+"\t"+str(loadup[t])+"\n")
         q.close()
         ## Writing decay tau vs depth & load to file
         with open(i+"/decayTC_disp_load.txt","w",encoding="utf-8") as q:
-            q.write("Time Constant (ms)\tDepth (%s)\tLoad (mN)\n"%mikron)
+            q.write("Time Constant (ms)\tSigma (ms)\t Temperature ("+degcel+")\tDepth ("+mikron+")\tLoad (mN)\n")
             for t in range(len(decayTcs)):
-                q.write(str(decayTcs[t])+"\t"+str(depthUnlod[t])+"\t"+str(loaddw[t])+"\n")
+                q.write(str(decayTcs[t])+"\t"+str(decayTcsErr[t])+"\t"+str(tempMin[t])+"\t"+str(depthUnlod[t])+"\t"+str(loaddw[t])+"\n")
         q.close()
     ## Plot of each cycle's tau of whole experiment's oscillations
         ax=plt.gca()
@@ -1188,35 +1201,47 @@ for i in file_list:
             singleDis=np.array(singleDis)
             singleTemp=np.array(singleTemp)
             plt.scatter(singleDis,singleTemp)
+            plt.xlabel('Displacement (%s)'%mikron)
+            plt.ylabel('Temperature (%s)'%degcel)
             plt.savefig(os.path.join(i,"TemperatureAll_Depth.png"),dpi=256)
             plt.figure()
             singleTim=np.array(singleTim)
             plt.scatter(singleTim,singleTemp)
+            plt.xlabel('Time (s)')
+            plt.ylabel('Temperature (%s)'%degcel)
             plt.savefig(os.path.join(i,"TemperatureAll_Time.png"),dpi=256)
             fig,ax=plt.subplots()
             ax1=ax.twinx()
             ax.scatter(singleTim,singleDis,label="Displacement",color="orange")
             ax1.scatter(singleTim,singleLoad,label="Load",color="cyan")
             ax1.yaxis.set_label("Load (mN)")
-            ax.yaxis.set_label("Displacement (%sm)"%mikron)
-            ax1.axes.yaxis.set_label("Load (mN)")
-            ax.axes.yaxis.set_label("Displacement (%sm)"%mikron)
+            ax.set_ylabel("Displacement (%s)"%mikron)
+            ax1.set_ylabel("Load (mN)")
+            ax.set_xlabel('Time (s)')
             fig.legend()
             plt.savefig(os.path.join(i,"DispAll.png"),dpi=256)
             plt.figure()
             plt.scatter(singleDis,singleLoad)
+            plt.xlabel('Displacement (%s)'%mikron)
+            plt.ylabel('Load (mN)')
             plt.savefig(os.path.join(i,"LoadDisp-Single.png"),dpi=256)
             plt.figure()
             for inc in range(p):
                 plt.scatter(multiTim[inc],medfilt(multiTemp[inc],101))
+            plt.xlabel('Time (s)')
+            plt.ylabel('Temperature (%s)'%degcel)
             plt.savefig(os.path.join(i,"TemperatureAll_Mtime.png"),dpi=256)
             plt.figure()
             for inc in range(p):
                 plt.scatter(multiTim[inc],medfilt(multiLoad[inc],101))
+            plt.xlabel('Time (s)')
+            plt.ylabel('Load (mN)')
             plt.savefig(os.path.join(i,"TemperatureAll_Mload.png"),dpi=256)
             plt.figure()
             for inc in range(p):
                 plt.scatter(multiTim[inc],medfilt(multiDis[inc],101))
+            plt.xlabel('Time (s)')
+            plt.ylabel('Displacement (%s)'%mikron)
             plt.savefig(os.path.join(i,"TemperatureAll_Mdis.png"),dpi=256)                                        
         plt.close()
     m+=1
